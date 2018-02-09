@@ -1,0 +1,5 @@
+timestamp, duration, seqNum, isFault, 							args 
+ 		0, 		  0, 	  1,   False,    						  ls 
+	   10, 		  0,	  2,   False, 	 					  ls -la
+	   25, 		  5, 	  3,  	True, 	 			 ping google.com
+	   40, 		  0, 	  4,   False, 	 					   ls -l
