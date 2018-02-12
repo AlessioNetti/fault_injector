@@ -305,6 +305,7 @@ class InjectionThreadPool(ThreadPool):
         # (if skip_expired is True) or still start it immediately
         elif time_to_task < 0 and self._skip_expired:
             InjectionThreadPool.logger.warning('Starting time of task %s expired. Skipping' % task.args)
+            self._process_result(task, time(), -1)
             return
         # We parse the arguments sequence for the command of the task, supplied as string in the message
         task_args = split(task.args, posix=self._posix_shell)
@@ -382,5 +383,3 @@ class InjectionThreadPool(ThreadPool):
             msg = MessageBuilder.status_end(task.args, task.duration, task.seqNum, timestamp, task.isFault)
         if msg is not None:
             self._server.broadcast_msg(msg)
-
-

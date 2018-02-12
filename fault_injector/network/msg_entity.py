@@ -80,10 +80,18 @@ class MessageEntity(ABC):
 
     def get_registered_hosts(self):
         """
-        Returns a dictionary of addresses:sockets with which communication is currently active
+        Returns a list of (ip, port) addresses with which communication is currently active
 
         """
-        return self._registeredHosts
+        return list(self._registeredHosts.keys())
+
+    def get_n_registered_hosts(self):
+        """
+        Returns the number of currently connected hosts
+
+        :return: the number of currently connected hosts
+        """
+        return len(self._registeredHosts)
 
     def send_msg(self, addr, comm):
         """
@@ -92,7 +100,7 @@ class MessageEntity(ABC):
         :param addr: the address (ip, port) tuple of the target host
         :param comm: The message to be sent
         """
-        if not isinstance(comm, dict):
+        if comm is None or not isinstance(comm, dict):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
         self._outputLock.acquire()
@@ -107,7 +115,7 @@ class MessageEntity(ABC):
 
         :param comm: The message to be sent
         """
-        if not isinstance(comm, dict):
+        if comm is None or not isinstance(comm, dict):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
         addr = (MessageEntity.BROADCAST_ID, MessageEntity.BROADCAST_ID)
@@ -124,9 +132,9 @@ class MessageEntity(ABC):
         :return: The length of the message queue
         """
         self._inputLock.acquire()
-        l = len(self._inputQueue)
+        le = len(self._inputQueue)
         self._inputLock.release()
-        return l
+        return le
 
     def pop_msg_queue(self, blocking=True):
         """
@@ -141,6 +149,18 @@ class MessageEntity(ABC):
         addr, comm = self._inputQueue.pop(0) if len(self._inputQueue) > 0 else (None, None)
         self._inputLock.release()
         return addr, comm
+
+    def remove_host(self, addr):
+        """
+        Removes an host from the list of active hosts
+
+        Public, asynchronous version of the private method
+
+        :param addr: The (ip, port) address corresponding to the host to remove
+        """
+        self._outputLock.acquire()
+        self._outputQueue.append((addr, None))
+        self._outputLock.release()
 
     def _send_msg(self, addr, comm):
         """
@@ -182,16 +202,20 @@ class MessageEntity(ABC):
         self._outputQueue = []
         self._outputLock.release()
         for addr, msg in private_msg_list:
-            if addr[0] == MessageEntity.BROADCAST_ID:
-                to_remove = []
-                for addr in self._registeredHosts.keys():
+            if msg is not None:
+                if addr[0] == MessageEntity.BROADCAST_ID:
+                    to_remove = []
+                    for re_addr in self._registeredHosts.keys():
+                        if not self._send_msg(re_addr, msg):
+                            to_remove.append(re_addr)
+                    for re_addr in to_remove:
+                        self._remove_host(re_addr)
+                else:
                     if not self._send_msg(addr, msg):
-                        to_remove.append(addr)
-                for addr in to_remove:
-                    self._remove_host(addr)
+                        self._remove_host(addr)
             else:
-                if not self._send_msg(addr, msg):
-                    self._remove_host(addr)
+                # Putting a None message on the queue means that the target host has to be removed
+                self._remove_host(addr)
         private_msg_list.clear()
 
     def _add_to_input_queue(self, addr, comm):

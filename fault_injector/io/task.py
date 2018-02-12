@@ -1,5 +1,6 @@
 from fault_injector.network.msg_builder import MessageBuilder
 
+
 class Task:
     """
     Struct-like class for easy access to task-related parameters

@@ -72,4 +72,3 @@ class Client(MessageEntity):
         for sock in self._registeredHosts.values():
             sock.close()
         Client.logger.info('Client has been shut down')
-

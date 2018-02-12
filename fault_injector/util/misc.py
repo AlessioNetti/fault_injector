@@ -2,6 +2,7 @@ import socket, threading
 
 ADDR_SEPARATOR = ':'
 
+
 def getipport(sock):
     """
     Returns a ip:port string corresponding to the address of the input socket
@@ -17,6 +18,7 @@ def formatipport(addr):
     ip = addr[0]
     port = str(addr[1])
     return ADDR_SEPARATOR.join([ip, port])
+
 
 def strtoaddr(s):
     """

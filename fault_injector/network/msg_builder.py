@@ -16,6 +16,7 @@ class MessageBuilder:
 
     COMMAND_START = 'command_start'
     COMMAND_START_SESSION = 'command_session_s'
+    COMMAND_SET_TIME = 'command_set_time'
     COMMAND_END_SESSION = 'command_session_e'
     COMMAND_TERMINATE = 'command_term'
 
@@ -31,11 +32,17 @@ class MessageBuilder:
     # List of all available fields
     FIELDS = [FIELD_TIME, FIELD_TYPE, FIELD_DATA, FIELD_SEQNUM, FIELD_DUR, FIELD_ISF, FIELD_ERR]
 
-
     @staticmethod
     def ack(timestamp, positive=True):
         msg = {}
         msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        return msg
+
+    @staticmethod
+    def command_set_time(timestamp):
+        msg = {}
+        msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.COMMAND_SET_TIME
         msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
