@@ -63,14 +63,19 @@ class InjectorServer:
                 self._update_session(addr, msg)
             # The set time is sent by the master after a successful ack and defines when the 'workload' is started
             elif msg_type == MessageBuilder.COMMAND_SET_TIME and self._master is not None and addr == self._master:
-                timestamp = time()
-                self._pool.reset_session(msg[MessageBuilder.FIELD_TIME], timestamp)
+                self._pool.reset_session(msg[MessageBuilder.FIELD_TIME], time())
+            # If the master has sent a clock correction request, we process it
+            elif msg_type == MessageBuilder.COMMAND_CORRECT_TIME and self._master is not None and addr == self._master:
+                self._pool.correct_time(msg[MessageBuilder.FIELD_TIME])
             # Processing a termination command
             elif msg_type == MessageBuilder.COMMAND_TERMINATE:
                 self._check_for_termination(addr, msg)
             # If a new command has been issued by the current session master, we add it to the thread pool queue
             elif addr == self._master and msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_START:
                 self._pool.submit_task(Task.msg_to_task(msg))
+            elif msg_type == MessageBuilder.COMMAND_GREET:
+                reply = MessageBuilder.status_greet(time(), self._pool.active_tasks())
+                self._server.send_msg(addr, reply)
             else:
                 InjectorServer.logger.warning('Invalid command sent from non-master host %s', formatipport(addr))
 

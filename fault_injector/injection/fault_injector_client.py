@@ -21,7 +21,7 @@ class InjectorClient:
     # Logger for the class
     logger = logging.getLogger(__name__)
 
-    def __init__(self, clientobj, workload_padding=20, pre_send_interval=300, session_wait=60, results_dir='results'):
+    def __init__(self, clientobj, workload_padding=20, pre_send_interval=600, session_wait=60, results_dir='results'):
         """
         Constructor for the class
 
@@ -29,7 +29,7 @@ class InjectorClient:
         :param workload_padding: Time in seconds to be added at the start of the workload as padding, in order to keep
             the system in idle state for a short time and prevent perturbation in the data
         :param pre_send_interval: Time in seconds specifying the interval of time between sending a task start command,
-            and its actual starting time. With the default settings, task start commands are sent 5 minutes before
+            and its actual starting time. With the default settings, task start commands are sent 10 minutes before
             their scheduled start time
         :param session_wait: Time in seconds defining the interval of time in which to wait for all connected hosts
             to reply during the initialization and finalization of the session
@@ -43,6 +43,8 @@ class InjectorClient:
         self._sessionWait = session_wait
         # Sleep period of the busy loop in the _inject method
         self._sleepPeriod = 0.5
+        # The interval used for sending clock correction messages to connected hosts
+        self._clockCorrectionPeriod = 30
         # A dictionary with (ip, port) keys, and values representing the Writer objects for execution logs associated
         # to each host
         self._writers = None
@@ -125,14 +127,15 @@ class InjectorClient:
         end_reached = False
         read_tasks = 0
 
-        # Start timestamp for the workload, computed from the timestamp of its first entry, minus the specified padding
-        # value
+        # Timestamp of the last correction that was applied to the clock of remote hosts
+        last_clock_correction = time()
+        # Start timestamp for the workload, computed from its first entry, minus the specified padding value
         start_timestamp = task.timestamp - self._workloadPadding
-        # Absolute timestamp associated to the workload's starting timestamp
-        start_timestamp_abs = time()
         # Synchronizes the time with all of the connected hosts
         msg = MessageBuilder.command_set_time(start_timestamp)
         self._client.broadcast_msg(msg)
+        # Absolute timestamp associated to the workload's starting timestamp
+        start_timestamp_abs = time()
 
         while not end_reached or self._tasks_are_pending():
             # While some tasks are still running, and there are tasks from the workload that still need to be read, we
@@ -157,7 +160,15 @@ class InjectorClient:
                     self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
 
             # We compute the new "virtual" timestamp, in function of the workload's starting time
-            now_timestamp = start_timestamp + (time() - start_timestamp_abs)
+            now_timestamp_abs = time()
+            now_timestamp = start_timestamp + (now_timestamp_abs - start_timestamp_abs)
+
+            # We perform periodically a correction of the clock of the remote hosts. This has impact only when there
+            # is a very large drift between the clocks, of several minutes
+            if now_timestamp_abs - last_clock_correction > self._clockCorrectionPeriod:
+                msg = MessageBuilder.command_correct_time(now_timestamp)
+                self._client.broadcast_msg(msg)
+                last_clock_correction = now_timestamp_abs
 
             while not end_reached and task.timestamp < now_timestamp + self._preSendInterval:
                 # We read all entries from the workload that correspond to tasks scheduled to start in the next
@@ -191,12 +202,16 @@ class InjectorClient:
         as messages are sent from the connected hosts.
         """
         self._client.start()
+
+        msg = MessageBuilder.command_greet(0)
+        self._client.broadcast_msg(msg)
+
         addrs = self._client.get_registered_hosts()
         self._writers = {}
         for addr in addrs:
             # We create an execution log writer for each connected host
             path = self._resultsDir + '/listening-' + addr[0] + '_' + str(addr[1]) + '.csv'
-            self._writers[path] = ExecutionLogWriter(path)
+            self._writers[addr] = ExecutionLogWriter(path)
 
         while True:
             # The loop does not end; it is up to users to terminate the listening process by killing the process
@@ -212,6 +227,9 @@ class InjectorClient:
             elif msg_type == MessageBuilder.STATUS_ERR:
                 InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
+            elif msg_type == MessageBuilder.STATUS_GREET:
+                InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks" % (
+                    formatipport(addr), str(msg[MessageBuilder.FIELD_DATA])))
 
     def _init_session(self, workload_name):
         """

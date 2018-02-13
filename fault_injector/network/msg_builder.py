@@ -13,12 +13,15 @@ class MessageBuilder:
     STATUS_START = 'status_start'
     STATUS_END = 'status_end'
     STATUS_ERR = 'status_err'
+    STATUS_GREET = 'status_greet'
 
     COMMAND_START = 'command_start'
     COMMAND_START_SESSION = 'command_session_s'
     COMMAND_SET_TIME = 'command_set_time'
+    COMMAND_CORRECT_TIME = 'command_correct_time'
     COMMAND_END_SESSION = 'command_session_e'
     COMMAND_TERMINATE = 'command_term'
+    COMMAND_GREET = 'command_greet'
 
     # Identifiers for the fields of the message
     FIELD_TYPE = 'type'
@@ -34,29 +37,37 @@ class MessageBuilder:
 
     @staticmethod
     def ack(timestamp, positive=True):
-        msg = {}
-        msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO}
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        return msg
+
+    @staticmethod
+    def command_greet(timestamp):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_GREET}
         msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
     @staticmethod
     def command_set_time(timestamp):
-        msg = {}
-        msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.COMMAND_SET_TIME
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_SET_TIME}
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        return msg
+
+    @staticmethod
+    def command_correct_time(timestamp):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_CORRECT_TIME}
         msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
     @staticmethod
     def command_session(timestamp, end=False):
-        msg = {}
-        msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.COMMAND_START_SESSION if not end else MessageBuilder.COMMAND_END_SESSION
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_START_SESSION if not end else MessageBuilder.COMMAND_END_SESSION}
         msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
     @staticmethod
     def command_terminate():
-        msg = {}
-        msg[MessageBuilder.FIELD_TYPE] = MessageBuilder.COMMAND_TERMINATE
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_TERMINATE}
         msg = MessageBuilder._build_fields(msg, None, None, None, None)
         return msg
 
@@ -64,6 +75,12 @@ class MessageBuilder:
     def command_start(args, duration, seqNum, timestamp, isFault):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_START}
         msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
+        return msg
+
+    @staticmethod
+    def status_greet(timestamp, num):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_GREET}
+        msg = MessageBuilder._build_fields(msg, num, None, None, timestamp, None)
         return msg
 
     @staticmethod

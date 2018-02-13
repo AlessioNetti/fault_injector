@@ -14,7 +14,7 @@ class ConfigLoader:
         "ABRUPT_TASK_KILL": True,
         "MAX_CONNECTIONS": 100,
         "SOCKET_TIMEOUT": 10,
-        "PRE_SEND_INTERVAL": 300,
+        "PRE_SEND_INTERVAL": 600,
         "WORKLOAD_PADDING": 20,
         "HOSTS": []
     }

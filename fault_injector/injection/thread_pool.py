@@ -50,6 +50,19 @@ class ThreadWrapper(Thread):
         self._lock.release()
         return t
 
+    def is_active(self):
+        """
+        Returns True the current status of the thread
+
+        :return: True if the thread is currently running a subprocess, False otherwise
+        """
+        st = False
+        self._lock.acquire()
+        if self._process is not None and self._process.returncode is None:
+            st = True
+        self._lock.release()
+        return st
+
     def start_process(self, **kwargs):
         """
         Starts a subprocess, if the thread has not been flagged for termination
@@ -60,8 +73,12 @@ class ThreadWrapper(Thread):
         self._lock.acquire()
         p = None
         if not self._hasToFinish:
-            p = subprocess.Popen(**kwargs)
-            self._process = p
+            try:
+                p = subprocess.Popen(**kwargs)
+                self._process = p
+            except(OSError, FileNotFoundError):
+                self._process = None
+                p = None
         self._lock.release()
         return p
 
@@ -107,6 +124,14 @@ class ThreadPool(ABC):
         self._maxRequests = max_requests if max_requests > 0 else 20
         # The list of worker thread objects
         self._threads = []
+
+    def active_tasks(self):
+        """
+        Returns the number of threads in the pool that are currently running subprocesses
+
+        :return: The number of currently active threads
+        """
+        return sum(t.is_active() for t in self._threads)
 
     def start(self):
         """
@@ -222,6 +247,8 @@ class InjectionThreadPool(ThreadPool):
     # Logger for the class
     logger = logging.getLogger(__name__)
 
+    CORRECTION_THRESHOLD = 60
+
     def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True):
         """
         Constructor for the class
@@ -242,6 +269,7 @@ class InjectionThreadPool(ThreadPool):
         # Timestamps for the starting time of the injection session in absolute and relative time
         self._session_start = 0
         self._session_start_abs = 0
+        self._correction_factor = 0
         # Condition object used to wake up threads that are in sleep state (waiting for their tasks' starting times)
         self._sleepCondition = Condition()
 
@@ -254,6 +282,23 @@ class InjectionThreadPool(ThreadPool):
         """
         self._session_start = timestamp
         self._session_start_abs = abs_timestamp
+
+    def correct_time(self, timestamp):
+        """
+        This method applies correction to the local clock if necessary
+
+        We compare the timestamp of the injector server (in relative workload time) to the local timestamp of the pool.
+        If the local clock drifts against the remote clock by more than a threshold, we compute an adaptive correction
+        factor for it. In other words, the correction is applied when the pool is "too much behind or in advance in
+        the workload's time" against the remote clock.
+
+        :param timestamp: The workload timestamp of the injector host
+        """
+        my_timestamp = time() - self._session_start_abs + self._session_start
+        diff = timestamp - my_timestamp - self._correction_factor
+        if abs(diff) > InjectionThreadPool.CORRECTION_THRESHOLD:
+            InjectionThreadPool.logger.warning("Clock is drifting by %s secs against the injector's clock" % str(diff))
+            self._correction_factor += 0.1 * diff
 
     def stop(self, kill_abruptly=True):
         """
@@ -294,7 +339,7 @@ class InjectionThreadPool(ThreadPool):
         :param task: The task object, in this case a Task instantiation 
         """
         # The elapsed time since the start of the session is computed
-        elapsed_time = time() - self._session_start_abs
+        elapsed_time = time() - self._session_start_abs + self._correction_factor
         # The time that is left until the scheduled start of the task is computed, and we sleep until that time
         time_to_task = task.timestamp - self._session_start - elapsed_time
         if time_to_task > 0:
@@ -316,8 +361,14 @@ class InjectionThreadPool(ThreadPool):
         task_start_time = time()
         # We spawn a subprocess running the task with its arguments
         p = current_thread().start_process(args=task_args)
-        # The thread may have been woken up because the pool must be terminated; in that case, we return
-        if p is None:
+        if p is None and not current_thread().has_to_terminate():
+            # If no subprocess was spawned even if the thread has not been flagged for termination, it means there
+            # was an error
+            InjectionThreadPool.logger.error('Error while starting task %s, check if path is correct', task.args)
+            self._process_result(task, time(), -1)
+            return
+        elif p is None:
+            # The thread may have been woken up because the pool must be terminated; in that case, we return
             return
         InjectionThreadPool.logger.info('Executing new task %s' % task.args)
         # All connected hosts are informed that the task has been started
