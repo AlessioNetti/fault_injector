@@ -66,7 +66,7 @@ class InjectorClient:
         :return: An InjectionClient object
         """
         cfg = ConfigLoader.getConfig(config)
-        cl = Client(socket_timeout=cfg['SOCKET_TIMEOUT'])
+        cl = Client(socket_timeout=cfg['SOCKET_TIMEOUT'], retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'])
         inj_c = InjectorClient(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'],
                                pre_send_interval=cfg['PRE_SEND_INTERVAL'], session_wait=cfg['SESSION_WAIT'],
                                results_dir=cfg['RESULTS_DIR'])
@@ -131,11 +131,12 @@ class InjectorClient:
         last_clock_correction = time()
         # Start timestamp for the workload, computed from its first entry, minus the specified padding value
         start_timestamp = task.timestamp - self._workloadPadding
+        now_timestamp = start_timestamp
         # Synchronizes the time with all of the connected hosts
-        msg = MessageBuilder.command_set_time(start_timestamp)
-        self._client.broadcast_msg(msg)
+        self._client.broadcast_msg(MessageBuilder.command_set_time(start_timestamp))
         # Absolute timestamp associated to the workload's starting timestamp
         start_timestamp_abs = time()
+        now_timestamp_abs = start_timestamp_abs
 
         while not end_reached or self._tasks_are_pending():
             # While some tasks are still running, and there are tasks from the workload that still need to be read, we
@@ -158,6 +159,13 @@ class InjectorClient:
                     InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
                         msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
                     self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
+                elif msg_type == MessageBuilder.ACK_YES:
+                    InjectorClient.logger.warning("Session resumed with host %s. Some tasks may have been lost" % formatipport(addr))
+                    self._pendingTasks[addr] = set()
+                    self._client.send_msg(addr, MessageBuilder.command_set_time(now_timestamp))
+                elif msg_type == MessageBuilder.ACK_NO:
+                    InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
+                    self._client.remove_host(addr)
 
             # We compute the new "virtual" timestamp, in function of the workload's starting time
             now_timestamp_abs = time()
@@ -191,6 +199,10 @@ class InjectorClient:
             if len(self._pendingTasks) > self._client.get_n_registered_hosts():
                 self._remove_disconnected_hosts()
 
+            if self._client.get_n_restored_connections() > 0:
+                msg_resume = MessageBuilder.command_session(time())
+                self._client.broadcast_to_restored_hosts(msg_resume)
+
             # This is a busy loop, with a short sleep period of roughly one second
             sleep(self._sleepPeriod)
 
@@ -202,6 +214,10 @@ class InjectorClient:
         as messages are sent from the connected hosts.
         """
         self._client.start()
+
+        if self._client.get_n_registered_hosts() == 0:
+            InjectorClient.logger.warning("No connected hosts for pulling information. Aborting...")
+            return
 
         msg = MessageBuilder.command_greet(0)
         self._client.broadcast_msg(msg)
@@ -228,8 +244,10 @@ class InjectorClient:
                 InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_GREET:
-                InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks" % (
-                    formatipport(addr), str(msg[MessageBuilder.FIELD_DATA])))
+                status_string = 'An injection session is in progress' if msg[MessageBuilder.FIELD_ISF] else \
+                    'No injection session is in progress'
+                InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks. %s" % (
+                    formatipport(addr), str(msg[MessageBuilder.FIELD_DATA]), status_string))
 
     def _init_session(self, workload_name):
         """

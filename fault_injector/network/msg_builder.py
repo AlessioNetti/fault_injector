@@ -14,6 +14,8 @@ class MessageBuilder:
     STATUS_END = 'status_end'
     STATUS_ERR = 'status_err'
     STATUS_GREET = 'status_greet'
+    STATUS_LOST = 'status_lost'
+    STATUS_RESTORED = 'status_restored'
 
     COMMAND_START = 'command_start'
     COMMAND_START_SESSION = 'command_session_s'
@@ -38,6 +40,12 @@ class MessageBuilder:
     @staticmethod
     def ack(timestamp, positive=True):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO}
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        return msg
+
+    @staticmethod
+    def connection_status(timestamp, restored=False):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESTORED if restored else MessageBuilder.STATUS_LOST}
         msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
@@ -78,9 +86,9 @@ class MessageBuilder:
         return msg
 
     @staticmethod
-    def status_greet(timestamp, num):
+    def status_greet(timestamp, num, active):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_GREET}
-        msg = MessageBuilder._build_fields(msg, num, None, None, timestamp, None)
+        msg = MessageBuilder._build_fields(msg, num, None, None, timestamp, active)
         return msg
 
     @staticmethod

@@ -74,7 +74,7 @@ class InjectorServer:
             elif addr == self._master and msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_START:
                 self._pool.submit_task(Task.msg_to_task(msg))
             elif msg_type == MessageBuilder.COMMAND_GREET:
-                reply = MessageBuilder.status_greet(time(), self._pool.active_tasks())
+                reply = MessageBuilder.status_greet(time(), self._pool.active_tasks(), self._master is not None)
                 self._server.send_msg(addr, reply)
             else:
                 InjectorServer.logger.warning('Invalid command sent from non-master host %s', formatipport(addr))
@@ -110,7 +110,6 @@ class InjectorServer:
             if self._master is not None and self._master == addr:
                 # In some cases, the master may lose its connection and then try to reconnect. In this case, we simply
                 # acknowledge its request
-                self._master = addr
                 ack = True
                 InjectorServer.logger.info('Injection session resumed with client %s' % formatipport(addr))
             elif self._master is None or self._master not in addresses:

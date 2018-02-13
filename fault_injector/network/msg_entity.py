@@ -284,14 +284,15 @@ class MessageEntity(ABC):
             data += packet
         return data
 
-    def _register_host(self, connection):
+    def _register_host(self, connection, overwrite=False):
         """
         Adds an host for which connection was successfully established to the list of active hosts
 
         :param connection: the socket object corresponding to the host
+        :param overwrite: if True, connections will be overwritten by new connections to the same host
         """
         addr = connection.getpeername()
-        if addr not in self._registeredHosts:
+        if addr not in self._registeredHosts or overwrite:
             self._registeredHosts[addr] = connection
             self._update_read_set()
         else:
