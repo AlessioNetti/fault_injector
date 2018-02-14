@@ -1,6 +1,5 @@
 import select, socket, logging
 from fault_injector.network.msg_entity import MessageEntity
-from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.misc import strtoaddr, formatipport
 from time import time
 
@@ -14,7 +13,27 @@ class Client(MessageEntity):
     # Logger for the class
     logger = logging.getLogger(__name__)
 
-    BROADCAST_RESTORED_ID = 'r*'
+    # Static definitions for messages regarding the status of a connection
+    _CONNECTION_LOST_MSG = False
+    _CONNECTION_RESTORED_MSG = True
+
+    @staticmethod
+    def is_status_message(msg):
+        """
+        Inspects the type of a message received on the queue, and determines if it is a status message
+
+        When connections are lost or restored, status messages are injected into the input queue in order to
+        asynchronously signal the status change. This method allows to determine if a message in the queue is of
+        such type.
+
+        :param msg: The message to be inspected
+        :return: A tuple of bools: the first element is True if msg is a status message, and the second expresses the
+            status change of the connection (True if restored, False if lost)
+        """
+        if isinstance(msg, type(Client._CONNECTION_RESTORED_MSG)):
+            return True, msg == Client._CONNECTION_RESTORED_MSG
+        else:
+            return False, None
 
     def __init__(self, socket_timeout=10, retry_interval=600, retry_period=30):
         """
@@ -28,10 +47,9 @@ class Client(MessageEntity):
         self._readSet = [self._dummy_sock_r]
         # Dictionary of hosts for which we are trying to re-establish connection, with (ip, port) keys
         self._dangling = {}
-        # The list of hosts for which connection was successfully re-established
-        self._restored = []
         self._retry_interval = retry_interval
         self._retry_period = retry_period
+        self._restored_list_limit = 10000
 
     def add_servers(self, addrs):
         """
@@ -54,25 +72,6 @@ class Client(MessageEntity):
                         pass
                 else:
                     Client.logger.error('Address %s is malformed' % str_addr)
-
-    def broadcast_to_restored_hosts(self, comm):
-        """
-        Public method for broadcasting messages
-
-        This variant targets specifically hosts whose connection has been restored after one or more retries, and need
-        a new handshake message
-
-        :param comm: The message to be sent
-        """
-        if comm is None or not isinstance(comm, dict):
-            MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
-            return
-        addr = (Client.BROADCAST_RESTORED_ID, Client.BROADCAST_RESTORED_ID)
-        self._outputLock.acquire()
-        self._outputQueue.append((addr, comm))
-        self._outputLock.release()
-        # Writing to the internal pipe to wake up the server if it is waiting on a select call
-        self._dummy_sock_w.send(MessageEntity.DUMMY_STR)
 
     def _listen(self):
         """
@@ -97,6 +96,7 @@ class Client(MessageEntity):
                         data = self._recv_msg(sock)
                         if data:
                             self._add_to_input_queue(sock.getpeername(), data)
+                # We try to re-establish connection with lost hosts, if present
                 self._restore_dangling_connections()
             except socket.timeout:
                 pass
@@ -106,75 +106,50 @@ class Client(MessageEntity):
             sock.close()
         Client.logger.info('Client has been shut down')
 
-    def _flush_output_queue(self):
-        """
-        Private method that tries to dispatch all pending messages in the output queue
-        """
-        # Flushing the dummy socket used for triggering select calls
-        self._dummy_sock_r.recv(2048)
-        # The outbound message queue is flushed and transferred to a private list
-        self._outputLock.acquire()
-        private_msg_list = self._outputQueue
-        self._outputQueue = []
-        self._outputLock.release()
-        for addr, msg in private_msg_list:
-            if msg is not None:
-                if addr[0] == MessageEntity.BROADCAST_ID:
-                    to_remove = []
-                    for re_addr in self._registeredHosts.keys():
-                        if not self._send_msg(re_addr, msg):
-                            to_remove.append(re_addr)
-                    for re_addr in to_remove:
-                        self._remove_host(re_addr)
-                # This section tackles messages to be broadcasted at hosts whose connection was restored
-                elif addr[0] == Client.BROADCAST_RESTORED_ID:
-                    to_remove = []
-                    for re_addr in self._restored:
-                        if not self._send_msg(re_addr, msg):
-                            to_remove.append(re_addr)
-                    self._restored.clear()
-                    for re_addr in to_remove:
-                        self._remove_host(re_addr)
-                else:
-                    if not self._send_msg(addr, msg):
-                        self._remove_host(addr)
-            else:
-                # Putting a None message on the queue means that the target host has to be removed
-                self._remove_host(addr, now=True)
-        private_msg_list.clear()
-
     def _remove_host(self, address, now=False):
         """
         Removes an host from the list of active hosts
 
         :param address: The (ip, port) address corresponding to the host to remove
-        :param now: If True, the client will attempt to re-establish a connection with the target host
+        :param now: If False, the client will attempt to re-establish a connection with the target host
         """
         super(Client, self)._remove_host(address)
-        self._add_to_input_queue(address, MessageBuilder.connection_status(time()))
+        # When connection is lost, we inject a status message for that host in the input queue
+        self._add_to_input_queue(address, Client._CONNECTION_LOST_MSG)
         if not now and address not in self._dangling:
             first_time = time() - self._retry_period
+            # This list contains two items: the timestamp of when connection was lost, and the timestamp of the last
+            # re-connection attempt
             self._dangling[address] = [first_time, first_time]
 
     def _restore_dangling_connections(self):
+        """
+        Tries to re-establish connection with "dangling" hosts
+
+        A "dangling" host is one whose connection has been recently lost, in a time window that falls within
+        retry_interval. If the connection could not be established by the end of the time window, the host is dropped
+        """
         if len(self._dangling) > 0:
             time_now = time()
+            to_pop = []
             for addr, time_list in self._dangling.items():
+                # If a dangling host has passed its retry interval, we remove it completely
                 if time_now - time_list[1] > self._retry_interval:
-                    self._remove_host(addr, now=True)
-                    self._dangling.pop(addr, None)
+                    to_pop.append(addr)
+                # We retry establishing a connection with the dangling host
                 elif time_now - time_list[0] >= self._retry_period:
                     time_list[0] = time_now
                     try:
                         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                         sock.connect((socket.gethostbyname(addr[0]), addr[1]))
                         self._register_host(sock, overwrite=True)
-                        self._dangling.pop(addr, None)
-                        self._add_to_input_queue(addr, MessageBuilder.connection_status(time(), restored=True))
-                        self._restored.append(addr)
+                        to_pop.append(addr)
+                        # When connection is re-established, we inject a status message for that host in the input queue
+                        self._add_to_input_queue(addr, Client._CONNECTION_RESTORED_MSG)
                         Client.logger.info('Connection to server %s was successfully restored' % formatipport(addr))
                     except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError):
                         pass
-
-    def get_n_restored_connections(self):
-        return len(self._restored)
+            # We remove all hosts for which connection was re-established from the dangling ones
+            for addr in to_pop:
+                self._dangling.pop(addr, None)
+            to_pop.clear()

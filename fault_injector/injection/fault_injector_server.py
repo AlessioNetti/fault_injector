@@ -107,14 +107,9 @@ class InjectorServer:
             InjectorServer.logger.info('Injection session terminated with client %s' % formatipport(addr))
         elif msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_START_SESSION:
             addresses = self._server.get_registered_hosts()
-            if self._master is not None and self._master == addr:
-                # In some cases, the master may lose its connection and then try to reconnect. In this case, we simply
-                # acknowledge its request
-                ack = True
-                InjectorServer.logger.info('Injection session resumed with client %s' % formatipport(addr))
-            elif self._master is None or self._master not in addresses:
-                # If there is no current master, or the previous one lost its connection without trying to resume
-                # the session, we accept the session start request of the new host
+            if self._master is None or self._master not in addresses or (self._master is not None and self._master == addr):
+                # If there is no current master, or the previous one lost its connection, we accept the
+                # session start request of the new host
                 self._master = addr
                 # When starting a brand new session, the thread pool must be reset in order to prevent orphan tasks
                 # from the previous session to keep running

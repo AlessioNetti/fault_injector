@@ -52,6 +52,8 @@ class InjectorClient:
         # which we are waiting response on remote hosts
         self._pendingTasks = None
         self._reader = None
+        self._start_timestamp = 0
+        self._start_timestamp_now = 0
         # We register the signal handler for termination requested by the user
         signal.signal(signal.SIGINT, self._signalhandler)
 
@@ -130,13 +132,11 @@ class InjectorClient:
         # Timestamp of the last correction that was applied to the clock of remote hosts
         last_clock_correction = time()
         # Start timestamp for the workload, computed from its first entry, minus the specified padding value
-        start_timestamp = task.timestamp - self._workloadPadding
-        now_timestamp = start_timestamp
+        self._start_timestamp = task.timestamp - self._workloadPadding
         # Synchronizes the time with all of the connected hosts
-        self._client.broadcast_msg(MessageBuilder.command_set_time(start_timestamp))
+        self._client.broadcast_msg(MessageBuilder.command_set_time(self._start_timestamp))
         # Absolute timestamp associated to the workload's starting timestamp
-        start_timestamp_abs = time()
-        now_timestamp_abs = start_timestamp_abs
+        self._start_timestamp_abs = time()
 
         while not end_reached or self._tasks_are_pending():
             # While some tasks are still running, and there are tasks from the workload that still need to be read, we
@@ -145,31 +145,48 @@ class InjectorClient:
                 # We process all messages in the input queue, and write their content to the execution log for the
                 # given host
                 addr, msg = self._client.pop_msg_queue()
-                self._writers[addr].write_entry(msg)
-                msg_type = msg[MessageBuilder.FIELD_TYPE]
-                # We log on the terminal the content of the message in a pretty form
-                if msg_type == MessageBuilder.STATUS_START:
-                    InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
-                elif msg_type == MessageBuilder.STATUS_END:
-                    InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
-                        msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
-                    # If a task terminates, we remove its sequence number from the set of pending tasks for the host
-                    self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
-                elif msg_type == MessageBuilder.STATUS_ERR:
-                    InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
-                        msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
-                    self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
-                elif msg_type == MessageBuilder.ACK_YES:
-                    InjectorClient.logger.warning("Session resumed with host %s. Some tasks may have been lost" % formatipport(addr))
-                    self._pendingTasks[addr] = set()
-                    self._client.send_msg(addr, MessageBuilder.command_set_time(now_timestamp))
-                elif msg_type == MessageBuilder.ACK_NO:
-                    InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
-                    self._client.remove_host(addr)
+                # We process status messages for connections that are in the queue
+                is_status, status = Client.is_status_message(msg)
+                if is_status and not status:
+                    # If connection has been lost with an host, we remove its pendingTasks entry
+                    self._writers[addr].write_entry(MessageBuilder.connection_status(time()))
+                    self._pendingTasks.pop(addr, None)
+                elif is_status and status:
+                    # If connection has been restored with an host, we send a new session start command
+                    resume_msg = MessageBuilder.command_session(time())
+                    self._client.send_msg(addr, resume_msg)
+                else:
+                    msg_type = msg[MessageBuilder.FIELD_TYPE]
+                    if msg_type != MessageBuilder.ACK_YES and msg_type != MessageBuilder.ACK_NO:
+                        # Ack messages are not written to the output log
+                        self._writers[addr].write_entry(msg)
+                    # We log on the terminal the content of the message in a pretty form
+                    if msg_type == MessageBuilder.STATUS_START:
+                        InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                    elif msg_type == MessageBuilder.STATUS_END:
+                        InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
+                            msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                        # If a task terminates, we remove its sequence number from the set of pending tasks for the host
+                        self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
+                    elif msg_type == MessageBuilder.STATUS_ERR:
+                        InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
+                            msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
+                        self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
+                    elif msg_type == MessageBuilder.ACK_YES:
+                        # ACK messages after the initialization phase are received ONLY when a connection is restored,
+                        # and the session must be resumed
+                        InjectorClient.logger.warning("Session resumed with host %s. Some tasks may have been lost" % formatipport(addr))
+                        self._pendingTasks[addr] = set()
+                        now_timestamp_abs = time()
+                        self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(now_timestamp_abs)))
+                        self._writers[addr].write_entry(MessageBuilder.connection_status(now_timestamp_abs, restored=True))
+                    elif msg_type == MessageBuilder.ACK_NO:
+                        InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
+                        self._client.remove_host(addr)
 
             # We compute the new "virtual" timestamp, in function of the workload's starting time
             now_timestamp_abs = time()
-            now_timestamp = start_timestamp + (now_timestamp_abs - start_timestamp_abs)
+            now_timestamp = self._get_timestamp(now_timestamp_abs)
 
             # We perform periodically a correction of the clock of the remote hosts. This has impact only when there
             # is a very large drift between the clocks, of several minutes
@@ -191,17 +208,6 @@ class InjectorClient:
                 if task is None or (max_tasks is not None and read_tasks >= max_tasks):
                     end_reached = True
                     reader.close()
-
-            # If the number of hosts from which we are waiting replies is higher than the number of connected hosts
-            # (as computed by the Client) object, it means we have lost connectivity with some hosts. Therefore, we
-            # remove them. The writer objects are instead kept open because there might still be spurious messages
-            # awaiting to be popped from the input queue, from said hots
-            if len(self._pendingTasks) > self._client.get_n_registered_hosts():
-                self._remove_disconnected_hosts()
-
-            if self._client.get_n_restored_connections() > 0:
-                msg_resume = MessageBuilder.command_session(time())
-                self._client.broadcast_to_restored_hosts(msg_resume)
 
             # This is a busy loop, with a short sleep period of roughly one second
             sleep(self._sleepPeriod)
@@ -232,22 +238,37 @@ class InjectorClient:
         while True:
             # The loop does not end; it is up to users to terminate the listening process by killing the process
             addr, msg = self._client.pop_msg_queue()
-            # Messages are popped from the input queue, and their content stored
-            self._writers[addr].write_entry(msg)
-            msg_type = msg[MessageBuilder.FIELD_TYPE]
-            if msg_type == MessageBuilder.STATUS_START:
-                InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
-            elif msg_type == MessageBuilder.STATUS_END:
-                InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
-                    msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
-            elif msg_type == MessageBuilder.STATUS_ERR:
-                InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
-                    msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
-            elif msg_type == MessageBuilder.STATUS_GREET:
-                status_string = 'An injection session is in progress' if msg[MessageBuilder.FIELD_ISF] else \
-                    'No injection session is in progress'
-                InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks. %s" % (
-                    formatipport(addr), str(msg[MessageBuilder.FIELD_DATA]), status_string))
+            # We process status messages for connections that are in the queue
+            is_status, status = Client.is_status_message(msg)
+            if is_status:
+                # If connection has been lost or re-established with an host, we log the event
+                self._writers[addr].write_entry(MessageBuilder.connection_status(time(), restored=status))
+            else:
+                # Messages are popped from the input queue, and their content stored
+                self._writers[addr].write_entry(msg)
+                msg_type = msg[MessageBuilder.FIELD_TYPE]
+                if msg_type == MessageBuilder.STATUS_START:
+                    InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                elif msg_type == MessageBuilder.STATUS_END:
+                    InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
+                        msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                elif msg_type == MessageBuilder.STATUS_ERR:
+                    InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
+                        msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
+                elif msg_type == MessageBuilder.STATUS_GREET:
+                    status_string = 'An injection session is in progress' if msg[MessageBuilder.FIELD_ISF] else \
+                        'No injection session is in progress'
+                    InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks. %s" % (
+                        formatipport(addr), str(msg[MessageBuilder.FIELD_DATA]), status_string))
+
+    def _get_timestamp(self, t):
+        """
+        Returns the current timestamp in virtual workload time
+
+        :param t: the reference absolute timestamp
+        :return: The current timestamp
+        """
+        return self._start_timestamp + (t - self._start_timestamp_abs)
 
     def _init_session(self, workload_name):
         """
@@ -340,20 +361,6 @@ class InjectorClient:
                 if len(s) > 0:
                     return True
         return False
-
-    def _remove_disconnected_hosts(self):
-        """
-        Removes disconnected hosts from those considered for execution log recording and for sending tasks
-        """
-        hosts = self._client.get_registered_hosts()
-        writers = list(self._writers.keys())
-        for addr in writers:
-            # If an host that is being considered for the injection process is not present in the list of currently
-            # connected hosts (managed by MessageEntity), we remove it
-            if addr not in hosts:
-                # self._writers[addr].close()
-                # self._writers.pop(addr, None)
-                self._pendingTasks.pop(addr, None)
 
     def _signalhandler(self, sig, frame):
         """
