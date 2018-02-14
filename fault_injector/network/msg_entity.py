@@ -2,6 +2,7 @@ import select, socket, threading
 import struct, json, logging
 from fault_injector.util.misc import getipport, formatipport, DummySocketBuilder
 from threading import Semaphore
+from collections import deque
 from abc import ABC, abstractmethod
 
 
@@ -42,11 +43,9 @@ class MessageEntity(ABC):
         self._registeredHosts = {}
         # The list of hosts registered for the 'select' calls (also includes the server socket, if present)
         self._readSet = []
-        # Mutual exclusion structure for access to the message queue
-        self._inputLock = threading.Lock()
-        self._inputQueue = []
-        self._outputLock = threading.Lock()
-        self._outputQueue = []
+        # Input and output message queues
+        self._inputQueue = deque()
+        self._outputQueue = deque()
         # This socket is used to wake up the messaging thread when there are outbound messages to be sent
         reads, writes = DummySocketBuilder.getDummySocket()
         self._dummy_sock_r = reads
@@ -103,9 +102,7 @@ class MessageEntity(ABC):
         if comm is None or not isinstance(comm, dict):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
-        self._outputLock.acquire()
         self._outputQueue.append((addr, comm))
-        self._outputLock.release()
         # Writing to the internal socket to wake up the server if it is waiting on a select call
         self._dummy_sock_w.send(MessageEntity.DUMMY_STR)
 
@@ -119,9 +116,7 @@ class MessageEntity(ABC):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
         addr = (MessageEntity.BROADCAST_ID, MessageEntity.BROADCAST_ID)
-        self._outputLock.acquire()
         self._outputQueue.append((addr, comm))
-        self._outputLock.release()
         # Writing to the internal pipe to wake up the server if it is waiting on a select call
         self._dummy_sock_w.send(MessageEntity.DUMMY_STR)
 
@@ -131,10 +126,7 @@ class MessageEntity(ABC):
 
         :return: The length of the message queue
         """
-        self._inputLock.acquire()
-        le = len(self._inputQueue)
-        self._inputLock.release()
-        return le
+        return len(self._inputQueue)
 
     def pop_msg_queue(self, blocking=True):
         """
@@ -145,9 +137,7 @@ class MessageEntity(ABC):
         :return: The first message in the queue
         """
         self._messageSem.acquire(blocking)
-        self._inputLock.acquire()
-        addr, comm = self._inputQueue.pop(0) if len(self._inputQueue) > 0 else (None, None)
-        self._inputLock.release()
+        addr, comm = self._inputQueue.popleft() if len(self._inputQueue) > 0 else (None, None)
         return addr, comm
 
     def remove_host(self, addr):
@@ -158,9 +148,7 @@ class MessageEntity(ABC):
 
         :param addr: The (ip, port) address corresponding to the host to remove
         """
-        self._outputLock.acquire()
         self._outputQueue.append((addr, None))
-        self._outputLock.release()
 
     def _send_msg(self, addr, comm):
         """
@@ -196,12 +184,10 @@ class MessageEntity(ABC):
         """
         # Flushing the dummy socket used for triggering select calls
         self._dummy_sock_r.recv(2048)
-        # The outbound message queue is flushed and transferred to a private list
-        self._outputLock.acquire()
-        private_msg_list = self._outputQueue
-        self._outputQueue = []
-        self._outputLock.release()
-        for addr, msg in private_msg_list:
+        # We compute the number of messages currently in the output queue
+        n_msg = len(self._outputQueue)
+        for i in range(n_msg):
+            addr, msg = self._outputQueue.popleft()
             if msg is not None:
                 if addr[0] == MessageEntity.BROADCAST_ID:
                     to_remove = []
@@ -216,7 +202,6 @@ class MessageEntity(ABC):
             else:
                 # Putting a None message on the queue means that the target host has to be removed
                 self._remove_host(addr)
-        private_msg_list.clear()
 
     def _add_to_input_queue(self, addr, comm):
         """
@@ -225,10 +210,8 @@ class MessageEntity(ABC):
         :param addr: The address (ip, port) of the sender host
         :param comm: The message to be added to the queue
         """
-        self._inputLock.acquire()
         self._inputQueue.append((addr, comm))
         self._messageSem.release()
-        self._inputLock.release()
 
     def _liveness_check(self, sock):
         """

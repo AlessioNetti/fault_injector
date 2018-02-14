@@ -432,5 +432,5 @@ class InjectionThreadPool(ThreadPool):
             msg = MessageBuilder.status_error(task.args, task.duration, task.seqNum, timestamp, task.isFault, rcode)
         else:
             msg = MessageBuilder.status_end(task.args, task.duration, task.seqNum, timestamp, task.isFault)
-        if msg is not None:
+        if msg is not None and not current_thread().has_to_terminate():
             self._server.broadcast_msg(msg)

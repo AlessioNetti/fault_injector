@@ -49,7 +49,6 @@ class Client(MessageEntity):
         self._dangling = {}
         self._retry_interval = retry_interval
         self._retry_period = retry_period
-        self._restored_list_limit = 10000
 
     def add_servers(self, addrs):
         """
