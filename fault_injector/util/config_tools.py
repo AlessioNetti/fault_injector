@@ -12,6 +12,7 @@ class ConfigLoader:
         "SKIP_EXPIRED": True,
         "RETRY_TASKS": True,
         "ABRUPT_TASK_KILL": True,
+        "SERVER_PORT": 30000,
         "MAX_CONNECTIONS": 100,
         "SOCKET_TIMEOUT": 10,
         "RETRY_INTERVAL": 600,

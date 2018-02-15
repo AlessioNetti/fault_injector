@@ -19,6 +19,7 @@ class Server(MessageEntity):
         :param socket_timeout: Timeout for the sockets
         :param max_connections: Maximum number of concurrent connections to the server
         """
+        assert port is not None, 'A listening port for the server must be specified'
         super().__init__(socket_timeout, max_connections)
         # The server socket must be initialized
         self._serverAddress = ('', port)

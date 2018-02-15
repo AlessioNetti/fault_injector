@@ -17,15 +17,20 @@ class InjectorServer:
     logger = logging.getLogger(__name__)
 
     @staticmethod
-    def build(config=None):
+    def build(config=None, port=None):
         """
         Static method that automatically builds an InjectorServer object starting from a given configuration file
         
         :param config: The path to the json configuration file
+        :param port: Listening port for the server
         :return: An InjectionServer object
         """
         cfg = ConfigLoader.getConfig(config)
-        se = Server(port=cfg['SERVER_PORT'], socket_timeout=cfg['SOCKET_TIMEOUT'], max_connections=cfg['MAX_CONNECTIONS'])
+
+        if port is None and 'SERVER_PORT' in cfg:
+            port = cfg['SERVER_PORT']
+
+        se = Server(port=port, socket_timeout=cfg['SOCKET_TIMEOUT'], max_connections=cfg['MAX_CONNECTIONS'])
         inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
                                retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'])
         return inj_s

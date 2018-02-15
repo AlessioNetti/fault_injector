@@ -56,6 +56,9 @@ class Client(MessageEntity):
         
         :param addrs: The addresses of servers to which to connect, in "ip:port" string format
         """
+        if addrs is None:
+            Client.logger.warning('You must specify one or more addresses to start the client')
+            return
         if not isinstance(addrs, (list, tuple)):
             addrs = [addrs]
         for str_addr in addrs:

@@ -26,7 +26,10 @@ def strtoaddr(s):
     """
     addr = [a.strip() for a in s.split(ADDR_SEPARATOR)]
     if len(addr) == 2:
-        addr[1] = int(addr[1])
+        try:
+            addr[1] = int(addr[1])
+        except ValueError:
+            return None
         return addr
     else:
         return None
