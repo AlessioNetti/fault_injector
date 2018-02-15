@@ -66,7 +66,7 @@ class Client(MessageEntity):
                         sock.connect((socket.gethostbyname(addr[0]), addr[1]))
                         self._register_host(sock)
                         Client.logger.info('Successfully connected to server %s' % str_addr)
-                    except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError):
+                    except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError, socket.gaierror):
                         Client.logger.warning('Could not connect to %s' % str_addr)
                         pass
                 else:

@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from time import time
 from threading import Thread, Lock, Semaphore, Condition, current_thread
 from subprocess import TimeoutExpired
+from collections import deque
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
@@ -117,7 +118,7 @@ class ThreadPool(ABC):
         # Semaphore and lock to regulate access to the queue
         self._queueSem = Semaphore(0)
         self._queueLock = Lock()
-        self._queue = []
+        self._queue = deque()
         # Boolean flag for thread management
         self._initialized = False
         self._terminating = False
@@ -139,6 +140,7 @@ class ThreadPool(ABC):
         """
         if not self._initialized:
             # The list of worker thread objects
+            self._queue = deque()
             self._threads = []
             for i in range(self._maxRequests):
                 self._threads.append(ThreadWrapper(target=self._working_loop))
@@ -222,9 +224,7 @@ class ThreadPool(ABC):
             if current_thread().has_to_terminate():
                 break
             self._queueLock.acquire()
-            task = None
-            if len(self._queue) > 0:
-                task = self._queue.pop(0)
+            task = self._queue.popleft() if len(self._queue) > 0 else None
             self._queueLock.release()
             if task is not None:
                 self._execute_task(task)

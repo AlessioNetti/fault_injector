@@ -46,6 +46,9 @@ class MessageEntity(ABC):
         # Input and output message queues
         self._inputQueue = deque()
         self._outputQueue = deque()
+        # Locks for access to input and output queues
+        self._inputLock = threading.Lock()
+        self._outputLock = threading.Lock()
         # This socket is used to wake up the messaging thread when there are outbound messages to be sent
         reads, writes = DummySocketBuilder.getDummySocket()
         self._dummy_sock_r = reads
@@ -102,7 +105,9 @@ class MessageEntity(ABC):
         if comm is None or not isinstance(comm, dict):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
+        self._outputLock.acquire()
         self._outputQueue.append((addr, comm))
+        self._outputLock.release()
         # Writing to the internal socket to wake up the server if it is waiting on a select call
         self._dummy_sock_w.send(MessageEntity.DUMMY_STR)
 
@@ -116,7 +121,9 @@ class MessageEntity(ABC):
             MessageEntity.logger.error('Messages must be supplied as dictionaries to send_msg')
             return
         addr = (MessageEntity.BROADCAST_ID, MessageEntity.BROADCAST_ID)
+        self._outputLock.acquire()
         self._outputQueue.append((addr, comm))
+        self._outputLock.release()
         # Writing to the internal pipe to wake up the server if it is waiting on a select call
         self._dummy_sock_w.send(MessageEntity.DUMMY_STR)
 
@@ -137,7 +144,9 @@ class MessageEntity(ABC):
         :return: The first message in the queue
         """
         self._messageSem.acquire(blocking)
+        self._inputLock.acquire()
         addr, comm = self._inputQueue.popleft() if len(self._inputQueue) > 0 else (None, None)
+        self._inputLock.release()
         return addr, comm
 
     def remove_host(self, addr):
