@@ -11,16 +11,18 @@ class Server(MessageEntity):
 
     logger = logging.getLogger(__name__)
 
-    def __init__(self, port, socket_timeout=10, max_connections=100):
+    def __init__(self, port, socket_timeout=10, max_connections=100, re_send_msgs=False):
         """
         Constructor for the class
         
         :param port: Listening port for the server socket
         :param socket_timeout: Timeout for the sockets
         :param max_connections: Maximum number of concurrent connections to the server
+        :param re_send_msgs: if True, the entity will keep track of sent/received messages, and eventually attempt
+            to resend them to hosts that have not received them due to a connection loss
         """
         assert port is not None, 'A listening port for the server must be specified'
-        super().__init__(socket_timeout, max_connections)
+        super().__init__(socket_timeout=socket_timeout, max_connections=max_connections, re_send_msgs=re_send_msgs)
         # The server socket must be initialized
         self._serverAddress = ('', port)
         af = socket.AF_INET
@@ -37,11 +39,11 @@ class Server(MessageEntity):
         """
         # Listen for incoming connections
         self._serverSock.bind(self._serverAddress)
-        self._serverSock.listen(self._max_connections)
+        self._serverSock.listen(self.max_connections)
         Server.logger.info('Server has been started')
         while not self._hasToFinish:
             try:
-                read, wr, err = select.select(self._readSet, [], self._readSet, self._sock_timeout)
+                read, wr, err = select.select(self._readSet, [], self._readSet, self.sock_timeout)
                 for sock in err:
                     self._remove_host(sock.getpeername())
                     if sock in read:
@@ -57,9 +59,13 @@ class Server(MessageEntity):
                         if not self._liveness_check(sock):
                             self._remove_host(sock.getpeername())
                         else:
-                            data = self._recv_msg(sock)
-                            if data:
-                                self._add_to_input_queue(sock.getpeername(), data)
+                            peername = sock.getpeername()
+                            data, seq_num = self._recv_msg(sock)
+                            if data is not None:
+                                self._add_to_input_queue(peername, data)
+                            elif self.reSendMsgs:
+                                self._forward_old_msgs(seq_num, peername)
+
             except socket.timeout:
                 pass
             except select.error:

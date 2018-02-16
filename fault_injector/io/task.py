@@ -30,7 +30,8 @@ class Task:
         t = Task()
         try:
             for a in vars(t):
-                v = type(getattr(t, a))(entry[a])
+                v_type = type(getattr(t, a))
+                v = v_type(entry[a]) if v_type != bool else entry[a] == 'True'
                 setattr(t, a, v)
             return t
         except KeyError:

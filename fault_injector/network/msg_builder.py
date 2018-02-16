@@ -14,8 +14,9 @@ class MessageBuilder:
     STATUS_END = 'status_end'
     STATUS_ERR = 'status_err'
     STATUS_GREET = 'status_greet'
-    STATUS_LOST = 'status_lost'
-    STATUS_RESTORED = 'status_restored'
+    STATUS_RESET = 'status_reset'
+    STATUS_LOST = 'detected_lost'
+    STATUS_RESTORED = 'detected_restored'
 
     COMMAND_START = 'command_start'
     COMMAND_START_SESSION = 'command_session_s'
@@ -38,15 +39,9 @@ class MessageBuilder:
     FIELDS = [FIELD_TIME, FIELD_TYPE, FIELD_DATA, FIELD_SEQNUM, FIELD_DUR, FIELD_ISF, FIELD_ERR]
 
     @staticmethod
-    def ack(timestamp, positive=True):
+    def ack(timestamp, positive=True, error=0):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
-        return msg
-
-    @staticmethod
-    def connection_status(timestamp, restored=False):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESTORED if restored else MessageBuilder.STATUS_LOST}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, error)
         return msg
 
     @staticmethod
@@ -101,6 +96,18 @@ class MessageBuilder:
     def status_end(args, duration, seqNum, timestamp, isFault):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_END}
         msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
+        return msg
+
+    @staticmethod
+    def status_connection(timestamp, restored=False):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESTORED if restored else MessageBuilder.STATUS_LOST}
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        return msg
+
+    @staticmethod
+    def status_reset(timestamp):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESET}
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
         return msg
 
     @staticmethod

@@ -17,6 +17,7 @@ class ConfigLoader:
         "SOCKET_TIMEOUT": 10,
         "RETRY_INTERVAL": 600,
         "RETRY_PERIOD": 30,
+        "RECOVER_AFTER_DISCONNECT": False,
         "PRE_SEND_INTERVAL": 600,
         "WORKLOAD_PADDING": 20,
         "HOSTS": []

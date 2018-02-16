@@ -30,7 +30,8 @@ class InjectorServer:
         if port is None and 'SERVER_PORT' in cfg:
             port = cfg['SERVER_PORT']
 
-        se = Server(port=port, socket_timeout=cfg['SOCKET_TIMEOUT'], max_connections=cfg['MAX_CONNECTIONS'])
+        se = Server(port=port, socket_timeout=cfg['SOCKET_TIMEOUT'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'],
+                    max_connections=cfg['MAX_CONNECTIONS'])
         inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
                                retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'])
         return inj_s
@@ -48,6 +49,7 @@ class InjectorServer:
         assert isinstance(serverobj, Server), 'InjectorServer needs a Server object in its constructor!'
         self._server = serverobj
         self._master = None
+        self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
         self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
                                          retry_tasks=retry_tasks)
@@ -105,27 +107,35 @@ class InjectorServer:
         :param msg: The message dictionary
         """
         ack = False
+        err = 0
         if msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_END_SESSION and addr == self._master:
             # If the current master has terminated its session, we react accordingly
             self._master = None
+            self._session_timestamp = -1
             ack = True
             InjectorServer.logger.info('Injection session terminated with client %s' % formatipport(addr))
         elif msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_START_SESSION:
+            session_ts = msg[MessageBuilder.FIELD_TIME]
             addresses = self._server.get_registered_hosts()
-            if self._master is None or self._master not in addresses or (self._master is not None and self._master == addr):
+            if self._master is None or self._master not in addresses or self._master == addr:
+                # When starting a brand new session, the thread pool must be reset in order to prevent orphan tasks
+                # from the previous session to keep running.
+                # The only exception is when the session start command refers to a started session, that must be
+                # restored after a disconnection of the master.
+                if not self._server.reSendMsgs or self._session_timestamp != session_ts or self._master is None:
+                    self._pool.stop(kill_abruptly=True)
+                    self._pool.start()
+                    err = -1
                 # If there is no current master, or the previous one lost its connection, we accept the
                 # session start request of the new host
                 self._master = addr
-                # When starting a brand new session, the thread pool must be reset in order to prevent orphan tasks
-                # from the previous session to keep running
-                self._pool.stop(kill_abruptly=True)
-                self._pool.start()
+                self._session_timestamp = session_ts
                 ack = True
                 InjectorServer.logger.info('Injection session started with client %s' % formatipport(addr))
             else:
                 InjectorServer.logger.info('Injection session rejected with client %s' % formatipport(addr))
             # An ack (positive or negative) is sent to the sender host
-        self._server.send_msg(addr, MessageBuilder.ack(0, ack))
+        self._server.send_msg(addr, MessageBuilder.ack(time(), ack, err))
 
     def _signalhandler(self, sig, frame):
         """
