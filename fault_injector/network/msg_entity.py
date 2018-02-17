@@ -40,6 +40,8 @@ class MessageEntity(ABC):
         # Counter that keeps track of the current sequence number for sent messages
         self._curr_seq_num = 0
         self._seq_num_lim = 4000000000
+        # This flag is True if the sequence number counter has already wrapper around the limit once
+        self._seq_num_wrapped = False
         # Timeout to be used for the sockets
         self.sock_timeout = socket_timeout
         # Maximum number of requests for server sockets
@@ -47,8 +49,6 @@ class MessageEntity(ABC):
         # The dictionary of sockets registered for communication, whether server or client
         # The keys are in the form of (ip, port) tuples
         self._registeredHosts = {}
-        # Dictionary of last (received, sent) tuples for sequence numbers from connected hosts
-        self._seq_nums = {}
         # The list of hosts registered for the 'select' calls (also includes the server socket, if present)
         self._readSet = []
         # Input and output message queues
@@ -222,8 +222,6 @@ class MessageEntity(ABC):
             if msg is not None:
                 seq_num = self._curr_seq_num
                 self._msgHistory.append((seq_num, addr, msg))
-                # The sequence numbers wrap around a certain limit, and return to 0
-                self._curr_seq_num = (self._curr_seq_num + 1) % self._seq_num_lim
                 if addr[0] == MessageEntity.BROADCAST_ID:
                     to_remove = []
                     for re_addr in self._registeredHosts.keys():
@@ -234,6 +232,10 @@ class MessageEntity(ABC):
                 else:
                     if not self._send_msg(seq_num, addr, msg):
                         self._remove_host(addr)
+                # The sequence numbers wrap around a certain limit, and return to 0
+                self._curr_seq_num = (self._curr_seq_num + 1) % self._seq_num_lim
+                if self._curr_seq_num == 0:
+                    self._seq_num_wrapped = True
             else:
                 # Putting a None message on the queue means that the target host has to be removed
                 self._remove_host(addr)
@@ -248,10 +250,9 @@ class MessageEntity(ABC):
         """
         self._outputLock.acquire()
         for m_seq_num, m_time, m_addr, msg in self._msgHistory:
-            # WARNING: if an host loses connection and in meantime the sequence numbers wrap around the upper limit,
-            # the new messages will not be forwarded. The probability of this happening in a real scenario is
-            # practically zero.
-            if start_seq < m_seq_num and m_addr[0] == MessageEntity.BROADCAST_ID:
+            # The part after the or serves to manage sequence number after wraparound, when the upper limit is reached
+            if (start_seq < m_seq_num or (self._seq_num_wrapped and start_seq - m_seq_num > self._seq_num_lim / 2) or
+                    not self._seq_num_wrapped and self._curr_seq_num < start_seq) and m_addr[0] == MessageEntity.BROADCAST_ID:
                 self._outputQueue.append((addr, msg))
         self._outputLock.release()
 
@@ -378,24 +379,6 @@ class MessageEntity(ABC):
                 MessageEntity.logger.warning('Removing host %s due to errors' % getipport(sock))
                 self._remove_host(sock)
 
-    def _update_seq_num(self, addr, seq_num, received=True):
-        """
-        Refreshes the sequence number associated to a certain connected host
-
-        :param addr: The address of the connected host
-        :param seq_num: The sequence number associated to the connected host
-        :param received: If True, then the sequence number refers to a received message, and sent otherwise
-        """
-        try:
-            nums = self._seq_nums[addr]
-        except KeyError:
-            self._seq_nums[addr] = [seq_num, -1] if received else [-1, seq_num]
-            return
-        if received and (nums[0] < seq_num or nums[0] - seq_num > self._seq_num_lim / 2):
-            self._seq_nums[addr][0] = seq_num
-        elif not received and (nums[1] < seq_num or nums[1] - seq_num > self._seq_num_lim / 2):
-            self._seq_nums[addr][1] = seq_num
-
     def _update_read_set(self):
         """
         Updates the list of socket enabled for reading on the 'select' calls
@@ -407,5 +390,16 @@ class MessageEntity(ABC):
         """
         The listener method that is run by the thread for this class. Must implement the actual communication behavior
         (client, server, or other) of subclasses.
+        """
+        raise NotImplementedError('This method must be implemented')
+
+    @abstractmethod
+    def _update_seq_num(self, addr, seq_num, received=True):
+        """
+        Refreshes the sequence number associated to a certain connected host
+
+        :param addr: The address of the connected host
+        :param seq_num: The sequence number associated to the connected host
+        :param received: If True, then the sequence number refers to a received message, and sent otherwise
         """
         raise NotImplementedError('This method must be implemented')

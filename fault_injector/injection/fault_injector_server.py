@@ -30,8 +30,7 @@ class InjectorServer:
         if port is None and 'SERVER_PORT' in cfg:
             port = cfg['SERVER_PORT']
 
-        se = Server(port=port, socket_timeout=cfg['SOCKET_TIMEOUT'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'],
-                    max_connections=cfg['MAX_CONNECTIONS'])
+        se = Server(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
                                retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'])
         return inj_s

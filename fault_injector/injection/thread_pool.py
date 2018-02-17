@@ -296,7 +296,7 @@ class InjectionThreadPool(ThreadPool):
         """
         my_timestamp = time() - self._session_start_abs + self._session_start
         diff = timestamp - my_timestamp - self._correction_factor
-        if abs(diff) > InjectionThreadPool.CORRECTION_THRESHOLD:
+        if abs(diff) > InjectionThreadPool.CORRECTION_THRESHOLD and self._session_start_abs > 0:
             InjectionThreadPool.logger.warning("Clock is drifting by %s secs against the injector's clock" % str(diff))
             self._correction_factor += 0.1 * diff
 

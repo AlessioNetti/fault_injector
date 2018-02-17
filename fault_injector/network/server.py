@@ -63,7 +63,7 @@ class Server(MessageEntity):
                             data, seq_num = self._recv_msg(sock)
                             if data is not None:
                                 self._add_to_input_queue(peername, data)
-                            elif self.reSendMsgs:
+                            elif self.reSendMsgs and seq_num is not None:
                                 self._forward_old_msgs(seq_num, peername)
 
             except socket.timeout:
@@ -76,6 +76,20 @@ class Server(MessageEntity):
         for sock in self._registeredHosts.values():
             sock.close()
         Server.logger.info('Server has been shut down')
+
+    def _update_seq_num(self, addr, seq_num, received=True):
+        """
+        Refreshes the sequence number associated to a certain connected host
+        
+        This implementation of the method is a dummy and does nothing. This is because in our client-server architecture
+        it is the client that tracks the sequence numbers of received/sent messages, and that has priority in the
+        message forwarding process
+
+        :param addr: The address of the connected host
+        :param seq_num: The sequence number associated to the connected host
+        :param received: If True, then the sequence number refers to a received message, and sent otherwise
+        """
+        pass
 
     def _update_read_set(self):
         """

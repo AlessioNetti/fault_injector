@@ -14,8 +14,9 @@ class Client(MessageEntity):
     logger = logging.getLogger(__name__)
 
     # Static definitions for messages regarding the status of a connection
-    _CONNECTION_LOST_MSG = False
-    _CONNECTION_RESTORED_MSG = True
+    CONNECTION_FINALIZED_MSG = -1
+    CONNECTION_LOST_MSG = 0
+    CONNECTION_RESTORED_MSG = 1
 
     @staticmethod
     def is_status_message(msg):
@@ -27,11 +28,11 @@ class Client(MessageEntity):
         such type.
 
         :param msg: The message to be inspected
-        :return: A tuple of bools: the first element is True if msg is a status message, and the second expresses the
-            status change of the connection (True if restored, False if lost)
+        :return: A tuple: the first element is True if msg is a status message, and the second expresses the
+            status change of the connection (depending on the constants defined above)
         """
-        if isinstance(msg, type(Client._CONNECTION_RESTORED_MSG)):
-            return True, msg == Client._CONNECTION_RESTORED_MSG
+        if isinstance(msg, type(Client.CONNECTION_RESTORED_MSG)):
+            return True, msg
         else:
             return False, None
 
@@ -49,6 +50,8 @@ class Client(MessageEntity):
         self._readSet = [self._dummy_sock_r]
         # Dictionary of hosts for which we are trying to re-establish connection, with (ip, port) keys
         self._dangling = {}
+        # Dictionary of last (received, sent) tuples for sequence numbers from connected hosts
+        self._seq_nums = {}
         self.retry_interval = retry_interval
         self.retry_period = retry_period
 
@@ -110,6 +113,24 @@ class Client(MessageEntity):
             sock.close()
         Client.logger.info('Client has been shut down')
 
+    def _update_seq_num(self, addr, seq_num, received=True):
+        """
+        Refreshes the sequence number associated to a certain connected host
+
+        :param addr: The address of the connected host
+        :param seq_num: The sequence number associated to the connected host
+        :param received: If True, then the sequence number refers to a received message, and sent otherwise
+        """
+        if addr not in self._seq_nums:
+            self._seq_nums[addr] = [seq_num, -1] if received else [-1, seq_num]
+            return
+        # We do not check for the value of the new sequence number. This can be done because, since we are using TCP,
+        # we expect data to arrive in the same order as it was originally sent, thus resulting in increasing seq nums
+        if received:
+            self._seq_nums[addr][0] = seq_num
+        else:
+            self._seq_nums[addr][1] = seq_num
+
     def _remove_host(self, address, now=False):
         """
         Removes an host from the list of active hosts
@@ -119,7 +140,7 @@ class Client(MessageEntity):
         """
         super(Client, self)._remove_host(address)
         # When connection is lost, we inject a status message for that host in the input queue
-        self._add_to_input_queue(address, Client._CONNECTION_LOST_MSG)
+        self._add_to_input_queue(address, Client.CONNECTION_LOST_MSG)
         if not now and address not in self._dangling:
             first_time = time() - self.retry_period
             # This list contains two items: the timestamp of when connection was lost, and the timestamp of the last
@@ -139,6 +160,7 @@ class Client(MessageEntity):
             for addr, time_list in self._dangling.items():
                 # If a dangling host has passed its retry interval, we remove it completely
                 if time_now - time_list[1] > self.retry_interval:
+                    self._add_to_input_queue(addr, Client.CONNECTION_FINALIZED_MSG)
                     to_pop.append(addr)
                 # We retry establishing a connection with the dangling host
                 elif time_now - time_list[0] >= self.retry_period:
@@ -152,7 +174,7 @@ class Client(MessageEntity):
                             self._send_msg(self._seq_nums[addr][0], addr, None)
                         to_pop.append(addr)
                         # When connection is re-established, we inject a status message for that host in the input queue
-                        self._add_to_input_queue(addr, Client._CONNECTION_RESTORED_MSG)
+                        self._add_to_input_queue(addr, Client.CONNECTION_RESTORED_MSG)
                         Client.logger.info('Connection to server %s was successfully restored' % formatipport(addr))
                     except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError):
                         pass
@@ -160,3 +182,5 @@ class Client(MessageEntity):
             for addr in to_pop:
                 self._dangling.pop(addr, None)
             to_pop.clear()
+
+

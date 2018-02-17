@@ -68,8 +68,7 @@ class InjectorClient:
         :return: An InjectionClient object
         """
         cfg = ConfigLoader.getConfig(config)
-        cl = Client(socket_timeout=cfg['SOCKET_TIMEOUT'], retry_interval=cfg['RETRY_INTERVAL'],
-                    re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'], retry_period=cfg['RETRY_PERIOD'])
+        cl = Client(retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_c = InjectorClient(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'],
                                pre_send_interval=cfg['PRE_SEND_INTERVAL'], session_wait=cfg['SESSION_WAIT'],
                                results_dir=cfg['RESULTS_DIR'])
@@ -139,9 +138,6 @@ class InjectorClient:
         # Absolute timestamp associated to the workload's starting timestamp
         self._start_timestamp_abs = time()
 
-        # Tracks the time intervals in which the client is connected to no hosts
-        idling_time = 0
-
         while not end_reached or self._tasks_are_pending():
             # While some tasks are still running, and there are tasks from the workload that still need to be read, we
             # keep looping
@@ -151,17 +147,19 @@ class InjectorClient:
                 addr, msg = self._client.pop_msg_queue()
                 # We process status messages for connections that are in the queue
                 is_status, status = Client.is_status_message(msg)
-                if is_status and not status:
+                if is_status and status == Client.CONNECTION_LOST_MSG:
                     # If connection has been lost with an host, we remove its pendingTasks entry
                     self._writers[addr].write_entry(MessageBuilder.status_connection(time()))
-                    self._pendingTasks.pop(addr, None)
-                    # If there are no connected servers at the moment, we start the countdown to finish the session
-                    if len(self._pendingTasks) == 0:
-                        idling_time = time()
-                elif is_status and status:
+                elif is_status and status == Client.CONNECTION_RESTORED_MSG:
                     # If connection has been restored with an host, we send a new session start command
                     resume_msg = MessageBuilder.command_session(session_start_ts)
                     self._client.send_msg(addr, resume_msg)
+                elif is_status and status == Client.CONNECTION_FINALIZED_MSG:
+                    self._pendingTasks.pop(addr, None)
+                    # If all connections to servers were finalized we assume that the injection can be terminated
+                    if len(self._pendingTasks) == 0:
+                        end_reached = True
+                        self._reader.close()
                 else:
                     msg_type = msg[MessageBuilder.FIELD_TYPE]
                     if msg_type != MessageBuilder.ACK_YES and msg_type != MessageBuilder.ACK_NO:
@@ -183,11 +181,11 @@ class InjectorClient:
                         # ACK messages after the initialization phase are received ONLY when a connection is restored,
                         # and the session must be resumed
                         InjectorClient.logger.warning("Session resumed with host %s" % formatipport(addr))
-                        self._pendingTasks[addr] = set()
                         now_timestamp_abs = time()
                         self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(now_timestamp_abs)))
                         self._writers[addr].write_entry(MessageBuilder.status_connection(now_timestamp_abs, restored=True))
                         if msg[MessageBuilder.FIELD_ERR] != 0:
+                            self._pendingTasks[addr] = set()
                             self._writers[addr].write_entry(MessageBuilder.status_reset(msg[MessageBuilder.FIELD_TIME]))
                     elif msg_type == MessageBuilder.ACK_NO:
                         InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
@@ -199,12 +197,13 @@ class InjectorClient:
 
             # We perform periodically a correction of the clock of the remote hosts. This has impact only when there
             # is a very large drift between the clocks, of several minutes
-            if now_timestamp_abs - last_clock_correction > self._clockCorrectionPeriod:
+            # If the sliding window for the task injection is disabled there is no need to perform clock correction
+            if now_timestamp_abs - last_clock_correction > self._clockCorrectionPeriod and self._preSendInterval >= 0:
                 msg = MessageBuilder.command_correct_time(now_timestamp)
                 self._client.broadcast_msg(msg)
                 last_clock_correction = now_timestamp_abs
 
-            while not end_reached and task.timestamp < now_timestamp + self._preSendInterval:
+            while not end_reached and (task.timestamp < now_timestamp + self._preSendInterval or self._preSendInterval < 0):
                 # We read all entries from the workload that correspond to tasks scheduled to start in the next
                 # minutes (specified by presendinterval), and issue the related commands. This supposes that the
                 # workload entries are ordered by their timestamp
@@ -217,12 +216,6 @@ class InjectorClient:
                 if task is None or (max_tasks is not None and read_tasks >= max_tasks):
                     end_reached = True
                     reader.close()
-
-            # If the client has been idling for a time longer than the re-connection retry interval of the message
-            # entity, we can safely assume that no re_connection will be performed and that we can terminate
-            if len(self._pendingTasks) == 0 and now_timestamp_abs - idling_time >= self._client.retry_interval:
-                end_reached = True
-                reader.close()
 
             # This is a busy loop, with a short sleep period of roughly one second
             sleep(self._sleepPeriod)

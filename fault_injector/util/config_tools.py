@@ -8,16 +8,14 @@ class ConfigLoader:
 
     _dfl_config = {
         "RESULTS_DIR": "results",
-        "MAX_REQUESTS": 20,
         "SKIP_EXPIRED": True,
         "RETRY_TASKS": True,
         "ABRUPT_TASK_KILL": True,
+        "RECOVER_AFTER_DISCONNECT": False,
         "SERVER_PORT": 30000,
-        "MAX_CONNECTIONS": 100,
-        "SOCKET_TIMEOUT": 10,
+        "MAX_REQUESTS": 20,
         "RETRY_INTERVAL": 600,
         "RETRY_PERIOD": 30,
-        "RECOVER_AFTER_DISCONNECT": False,
         "PRE_SEND_INTERVAL": 600,
         "WORKLOAD_PADDING": 20,
         "HOSTS": []
