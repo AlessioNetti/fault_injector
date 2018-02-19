@@ -1,6 +1,64 @@
 import socket, threading
+from fault_injector.network.msg_builder import MessageBuilder
 
 ADDR_SEPARATOR = ':'
+
+INJ_PREFIX = '/injection-'
+OUT_PREFIX = '/output-'
+LIST_PREFIX = '/listening-'
+
+
+def format_injection_filename(results_dir, addr, workload_name=None):
+    """
+    Returns a string used to name an execution record related to a specific fault injection session.
+
+    If no workload name is specified, the file is flagged as a listening session,
+    with the client operating in pull mode.
+
+    :param results_dir: Target directory of the file
+    :param addr: (ip, port) tuple representing the address of the target host
+    :param workload_name: Name of the injected workload
+    :return: A string, representing the name of the execution record file
+    """
+    if workload_name is not None:
+        return results_dir + INJ_PREFIX + workload_name + '-' + addr[0] + '_' + str(addr[1]) + '.csv'
+    else:
+        return results_dir + LIST_PREFIX + addr[0] + '_' + str(addr[1]) + '.csv'
+
+
+def format_output_filename(results_dir, msg):
+    """
+    Returns a string used to name the output of a specific task.
+
+    :param results_dir: The target directory of the file
+    :param msg: The dictionary containing all info regarding the task
+    :return: A string representing the path of the file
+    """
+    return results_dir + OUT_PREFIX + format_task_filename(msg) + '.log'
+
+
+def format_output_directory(results_dir, addr, workload_name):
+    """
+    Returns a string used to name the output log directory, containing all logs related to tasks executed in
+    an injection session.
+
+    :param results_dir: The target directory of the file
+    :param addr: The address of the host on which the workload was injected
+    :param workload_name: The name of the workload
+    :return: A string used to name the output log directory
+    """
+    return results_dir + OUT_PREFIX + workload_name + '-' + addr[0] + '_' + str(addr[1])
+
+
+def format_task_filename(msg):
+    """
+    Given a task end message, this method returns the associated name for the command line output log file
+
+    :param msg: A message dictionary
+    :return: A string representing the filename of the output log for the task
+    """
+    task_name = msg[MessageBuilder.FIELD_DATA].replace('sudo', '').replace('./', '')
+    return task_name.split(' ')[0] + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
 
 
 def getipport(sock):

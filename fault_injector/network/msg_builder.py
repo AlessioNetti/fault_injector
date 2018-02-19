@@ -33,15 +33,18 @@ class MessageBuilder:
     FIELD_TIME = 'timestamp'
     FIELD_DUR = 'duration'
     FIELD_ISF = 'isFault'
+    FIELD_OUTPUT = 'output'
     FIELD_ERR = 'error'
 
-    # List of all available fields
+    # List of all available fields (except output, which is treated separately)
     FIELDS = [FIELD_TIME, FIELD_TYPE, FIELD_DATA, FIELD_SEQNUM, FIELD_DUR, FIELD_ISF, FIELD_ERR]
 
     @staticmethod
-    def ack(timestamp, positive=True, error=0):
+    def ack(timestamp, positive=True, error=None):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, error)
+        if error is not None:
+            msg[MessageBuilder.FIELD_ERR] = error
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None)
         return msg
 
     @staticmethod
@@ -93,8 +96,18 @@ class MessageBuilder:
         return msg
 
     @staticmethod
-    def status_end(args, duration, seqNum, timestamp, isFault):
+    def status_end(args, duration, seqNum, timestamp, isFault, output=None):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_END}
+        if output is not None:
+            msg[MessageBuilder.FIELD_OUTPUT] = output
+        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
+        return msg
+
+    @staticmethod
+    def status_error(args, duration, seqNum, timestamp, isFault, error):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_ERR}
+        if error is not None:
+            msg[MessageBuilder.FIELD_ERR] = error
         msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
         return msg
 
@@ -111,13 +124,7 @@ class MessageBuilder:
         return msg
 
     @staticmethod
-    def status_error(args, duration, seqNum, timestamp, isFault, error):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_ERR}
-        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault, error)
-        return msg
-
-    @staticmethod
-    def _build_fields(msg, args=None, duration=None, seqNum=None, timestamp=None, isFault=None, error=None):
+    def _build_fields(msg, args=None, duration=None, seqNum=None, timestamp=None, isFault=None):
         if args is not None:
             msg[MessageBuilder.FIELD_DATA] = args
         if duration is not None:
@@ -128,6 +135,4 @@ class MessageBuilder:
             msg[MessageBuilder.FIELD_TIME] = int(timestamp)
         if isFault is not None:
             msg[MessageBuilder.FIELD_ISF] = isFault
-        if error is not None:
-            msg[MessageBuilder.FIELD_ERR] = error
         return msg

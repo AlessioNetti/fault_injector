@@ -3,10 +3,13 @@ from fault_injector.network.client import Client
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.config_tools import ConfigLoader
 from fault_injector.util.misc import formatipport, strtoaddr
+from fault_injector.util.misc import format_injection_filename, format_output_directory, format_output_filename
 from fault_injector.io.writer import ExecutionLogWriter
 from fault_injector.io.reader import Reader
-from os.path import splitext, basename
+from os.path import splitext, basename, isdir
+from os import mkdir
 from time import sleep, time
+from shutil import rmtree
 
 
 class InjectorClient:
@@ -48,6 +51,8 @@ class InjectorClient:
         # A dictionary with (ip, port) keys, and values representing the Writer objects for execution logs associated
         # to each host
         self._writers = None
+        # A dictionary containing the paths where output logs must be stored for each server
+        self._outputsDirs = None
         # Also a dictionary with (ip, port) keys: each entry is a set containing the sequence numbers for tasks from
         # which we are waiting response on remote hosts
         self._pendingTasks = None
@@ -174,6 +179,7 @@ class InjectorClient:
                             msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
                         # If a task terminates, we remove its sequence number from the set of pending tasks for the host
                         self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
+                        self._write_task_output(addr, msg)
                     elif msg_type == MessageBuilder.STATUS_ERR:
                         InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
                             msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
@@ -185,7 +191,7 @@ class InjectorClient:
                         now_timestamp_abs = time()
                         self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(now_timestamp_abs)))
                         self._writers[addr].write_entry(MessageBuilder.status_connection(now_timestamp_abs, restored=True))
-                        if msg[MessageBuilder.FIELD_ERR] != 0:
+                        if MessageBuilder.FIELD_ERR in msg:
                             self._pendingTasks[addr] = set()
                             self._writers[addr].write_entry(MessageBuilder.status_reset(msg[MessageBuilder.FIELD_TIME]))
                     elif msg_type == MessageBuilder.ACK_NO:
@@ -241,8 +247,7 @@ class InjectorClient:
         self._writers = {}
         for addr in addrs:
             # We create an execution log writer for each connected host
-            path = self._resultsDir + '/listening-' + addr[0] + '_' + str(addr[1]) + '.csv'
-            self._writers[addr] = ExecutionLogWriter(path)
+            self._writers[addr] = ExecutionLogWriter(format_injection_filename(self._resultsDir, addr))
 
         while True:
             # The loop does not end; it is up to users to terminate the listening process by killing the process
@@ -291,6 +296,7 @@ class InjectorClient:
         self._client.broadcast_msg(msg_start)
 
         self._writers = {}
+        self._outputsDirs = {}
         self._pendingTasks = {}
         session_accepted = 0
         session_replied = 0
@@ -307,8 +313,11 @@ class InjectorClient:
                     InjectorClient.logger.info("Injection session started with host %s" % formatipport(addr))
                     session_accepted += 1
                     session_replied += 1
-                    path = self._resultsDir + '/injection-' + workload_name + '-' + addr[0] + '_' + str(addr[1]) + '.csv'
-                    self._writers[addr] = ExecutionLogWriter(path)
+                    self._outputsDirs[addr] = format_output_directory(self._resultsDir, addr, workload_name)
+                    # The outputs directory needs to be flushed before starting the new injection session
+                    if isdir(self._outputsDirs[addr]):
+                        rmtree(self._outputsDirs[addr], ignore_errors=True)
+                    self._writers[addr] = ExecutionLogWriter(format_injection_filename(self._resultsDir, addr, workload_name))
                     self._writers[addr].write_entry(MessageBuilder.command_session(msg[MessageBuilder.FIELD_TIME]))
                     self._pendingTasks[addr] = set()
                 elif msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.ACK_NO:
@@ -371,6 +380,24 @@ class InjectorClient:
                 if len(s) > 0:
                     return True
         return False
+
+    def _write_task_output(self, addr, msg):
+        """
+        Given a task end message and an address, writes the related output log.
+
+        This is done only if the output field is present in the message, which happens only for benchmark tasks that
+        output to stdout.
+
+        :param addr: The address of the sender
+        :param msg: The task end message
+        """
+        if MessageBuilder.FIELD_OUTPUT not in msg or not isinstance(msg[MessageBuilder.FIELD_OUTPUT], str):
+            return
+        if not isdir(self._outputsDirs[addr]):
+            mkdir(self._outputsDirs[addr])
+        output_file = open(format_output_filename(self._outputsDirs[addr], msg), 'w')
+        output_file.write(msg[MessageBuilder.FIELD_OUTPUT])
+        output_file.close()
 
     def _signalhandler(self, sig, frame):
         """

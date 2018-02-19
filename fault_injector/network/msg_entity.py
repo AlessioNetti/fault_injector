@@ -231,7 +231,6 @@ class MessageEntity(ABC):
                     # If the sequence number wraps around its limit, we update the session timestamp
                     self._curr_seq_ts = int(time())
 
-
     def _forward_old_msgs(self, start_seq, addr):
         """
         Forwards all messages that were sent in a certain time frame to an host that has recently restored its

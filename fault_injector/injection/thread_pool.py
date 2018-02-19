@@ -2,11 +2,12 @@ import logging, subprocess, os
 from abc import ABC, abstractmethod
 from time import time
 from threading import Thread, Lock, Semaphore, Condition, current_thread
-from subprocess import TimeoutExpired
+from subprocess import TimeoutExpired, PIPE
 from collections import deque
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
+from sys import stdout
 from shlex import split
 
 
@@ -249,7 +250,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True):
         """
         Constructor for the class
         
@@ -258,12 +259,15 @@ class InjectionThreadPool(ThreadPool):
         :param skip_expired: Boolean flag. If True, tasks whose start timestamp has expired will not be executed
         :param retry_tasks: Boolean flag. If True, tasks terminating earlier than their expected duration will be
             re-executed
+        :param log_outputs: Boolean flag. If True, the command line outputs of each task will be tracked and sent to
+            all connected hosts upon termination
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
         self._server = msg_server
         self._skip_expired = skip_expired
         self._retry_tasks = retry_tasks
+        self._log_outputs = log_outputs
         # This flag determines whether we are running in a posix system or not. Used for shell argument parsing
         self._posix_shell = os.name == 'posix'
         # Timestamps for the starting time of the injection session in absolute and relative time
@@ -360,7 +364,7 @@ class InjectionThreadPool(ThreadPool):
         task_end_time = None
         task_start_time = time()
         # We spawn a subprocess running the task with its arguments
-        p = current_thread().start_process(args=task_args)
+        p = current_thread().start_process(args=task_args, stdout=PIPE)
         if p is None and not current_thread().has_to_terminate():
             # If no subprocess was spawned even if the thread has not been flagged for termination, it means there
             # was an error
@@ -393,7 +397,7 @@ class InjectionThreadPool(ThreadPool):
                     if self._retry_tasks and task_timeout > 0:
                         if rcode != 0:
                             InjectionThreadPool.logger.warning('Sub-task %s terminated unexpectedly' % task.args)
-                        p = current_thread().start_process(args=task_args)
+                        p = current_thread().start_process(args=task_args, stdout=PIPE)
                     else:
                         break
         # If the task has not terminated by its timeout, we just kill the process and collect the result
@@ -401,8 +405,11 @@ class InjectionThreadPool(ThreadPool):
             current_thread().force_stop_process()
             task_end_time = time()
             rcode = 0
+        # We capture the output of the executed task
+        outdata = p.communicate()[0]
+        outdata = outdata.decode(stdout.encoding) if outdata is not None else ''
         # All of the connected peers are informed of the termination of the task
-        self._process_result(task, task_end_time, rcode)
+        self._process_result(task, task_end_time, rcode, outdata)
         # Logging is done according to the return code of the task
         if rcode != 0:
             InjectionThreadPool.logger.error('Task %s terminated unexpectedly' % task.args)
@@ -420,17 +427,21 @@ class InjectionThreadPool(ThreadPool):
         if msg is not None:
             self._server.broadcast_msg(msg)
 
-    def _process_result(self, task, timestamp, rcode):
+    def _process_result(self, task, timestamp, rcode, outdata=''):
         """
         Method that sends a broadcast message to all connected hosts when a task terminates
         
         :param task: The msg related to the task that has terminated
         :param timestamp: The timestamp related to the termination time
         :param rcode: The return code of the task's execution
+        :param outdata: the shell output of the task, if it is a benchmark
         """
         if rcode != 0:
             msg = MessageBuilder.status_error(task.args, task.duration, task.seqNum, timestamp, task.isFault, rcode)
         else:
-            msg = MessageBuilder.status_end(task.args, task.duration, task.seqNum, timestamp, task.isFault)
+            # If output logging is not enabled, or the task is not a benchmark, the output data is discarded
+            if not self._log_outputs or task.isFault or len(outdata) == 0:
+                outdata = None
+            msg = MessageBuilder.status_end(task.args, task.duration, task.seqNum, timestamp, task.isFault, outdata)
         if msg is not None and not current_thread().has_to_terminate():
             self._server.broadcast_msg(msg)

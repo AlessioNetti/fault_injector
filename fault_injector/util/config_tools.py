@@ -12,6 +12,7 @@ class ConfigLoader:
         "RETRY_TASKS": True,
         "ABRUPT_TASK_KILL": True,
         "RECOVER_AFTER_DISCONNECT": False,
+        "LOG_OUTPUTS": True,
         "SERVER_PORT": 30000,
         "MAX_REQUESTS": 20,
         "RETRY_INTERVAL": 600,

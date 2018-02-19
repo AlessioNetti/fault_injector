@@ -35,7 +35,7 @@ class InjectorServer:
                                retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'])
         return inj_s
 
-    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True):
+    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True):
         """
         Constructor for the class
         
@@ -44,6 +44,7 @@ class InjectorServer:
         :param skip_expired: Boolean flag. See InjectionThreadPool for details
         :param retry_tasks: Boolean flag. See InjectionThreadPool for details
         :param kill_abruptly: Boolean flag. See InjectionThreadPool for details
+        :param log_outputs: Boolean flag. See InjectionThreadPool for details
         """
         assert isinstance(serverobj, Server), 'InjectorServer needs a Server object in its constructor!'
         self._server = serverobj
@@ -51,7 +52,7 @@ class InjectorServer:
         self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
         self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
-                                         retry_tasks=retry_tasks)
+                                         retry_tasks=retry_tasks, log_outputs=log_outputs)
 
     def listen(self):
         """
@@ -106,7 +107,7 @@ class InjectorServer:
         :param msg: The message dictionary
         """
         ack = False
-        err = 0
+        err = None
         if msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_END_SESSION and addr == self._master:
             # If the current master has terminated its session, we react accordingly
             self._master = None
