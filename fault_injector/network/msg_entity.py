@@ -3,6 +3,7 @@ import struct, json, logging
 from fault_injector.util.misc import getipport, formatipport, DummySocketBuilder
 from threading import Semaphore
 from collections import deque
+from time import time
 from abc import ABC, abstractmethod
 
 
@@ -23,6 +24,30 @@ class MessageEntity(ABC):
     BROADCAST_ID = '*'
     DUMMY_STR = b'-'
 
+    # Static definitions for messages regarding the status of a connection
+    CONNECTION_FINALIZED_MSG = -1
+    CONNECTION_LOST_MSG = 0
+    CONNECTION_RESTORED_MSG = 1
+    CONNECTION_TOREMOVE_MSG = 2
+
+    @staticmethod
+    def is_status_message(msg):
+        """
+        Inspects the type of a message received on the queue, and determines if it is a status message
+
+        When connections are lost or restored, status messages are injected into the input queue in order to
+        asynchronously signal the status change. This method allows to determine if a message in the queue is of
+        such type.
+
+        :param msg: The message to be inspected
+        :return: A tuple: the first element is True if msg is a status message, and the second expresses the
+            status change of the connection (depending on the constants defined above)
+        """
+        if isinstance(msg, type(MessageEntity.CONNECTION_RESTORED_MSG)):
+            return True, msg
+        else:
+            return False, None
+
     def __init__(self, socket_timeout=10, max_connections=100, re_send_msgs=False):
         """
         Constructor of the class
@@ -39,9 +64,10 @@ class MessageEntity(ABC):
         self.reSendMsgs = re_send_msgs
         # Counter that keeps track of the current sequence number for sent messages
         self._curr_seq_num = 0
+        # This timestamp is used to identify the session message were sent in. If the server restarts, this number will
+        # increase, allowing to distinguish messages with the same sequence number
+        self._curr_seq_ts = int(time())
         self._seq_num_lim = 4000000000
-        # This flag is True if the sequence number counter has already wrapper around the limit once
-        self._seq_num_wrapped = False
         # Timeout to be used for the sockets
         self.sock_timeout = socket_timeout
         # Maximum number of requests for server sockets
@@ -169,45 +195,8 @@ class MessageEntity(ABC):
         :param addr: The (ip, port) address corresponding to the host to remove
         """
         self._outputLock.acquire()
-        self._outputQueue.append((addr, None))
+        self._outputQueue.append((addr, MessageEntity.CONNECTION_TOREMOVE_MSG))
         self._outputLock.release()
-
-    def _send_msg(self, seq_num, addr, comm):
-        """
-        Private method that sends messages over specific active hosts of the registered hosts list
-
-        :param seq_num: sequence number of the message to be sent
-        :param addr: address of the target host
-        :param comm: content of the message. Must be supplied as a dictionary. If None, an empty message with its header
-            only will be sent: this type of messages is used to identify message forwarding requests, with seq_num
-            representing the sequence number of the last valid message received from the host
-        :return: True if the message was successfully sent, False otherwise
-        """
-        # Verifying if the input address has a corresponding open socket
-        try:
-            sock = self._registeredHosts[addr]
-        except KeyError:
-            sock = None
-        # If no valid socket was found for the input address, the message is not sent
-        if sock is None:
-            MessageEntity.logger.error('Cannot send to %s, is not registered' % formatipport(addr))
-            return False
-        if comm is None:
-            # An empty message containing only the header represents a message forwarding request
-            msg = struct.pack('>I', 0) + struct.pack('>I', seq_num)
-        else:
-            msg = json.dumps(comm).encode()
-            # Prefix each message with a 4-byte length (network byte order)
-            msg = struct.pack('>I', len(msg)) + struct.pack('>I', seq_num) + msg
-        try:
-            sock.sendall(msg)
-            if self.reSendMsgs and comm is not None:
-                self._update_seq_num(addr, seq_num, received=False)
-            return True
-        except Exception:
-            MessageEntity.logger.error('Exception encountered while sending msg to %s' % getipport(sock))
-            # If an error is encountered during communication, we suppose the host is dead
-            return False
 
     def _flush_output_queue(self):
         """
@@ -219,9 +208,13 @@ class MessageEntity(ABC):
         n_msg = len(self._outputQueue)
         for i in range(n_msg):
             addr, msg = self._outputQueue.popleft()
-            if msg is not None:
-                seq_num = self._curr_seq_num
-                self._msgHistory.append((seq_num, addr, msg))
+            is_status, status = MessageEntity.is_status_message(msg)
+            if is_status and status == MessageEntity.CONNECTION_TOREMOVE_MSG:
+                self._remove_host(addr)
+            else:
+                seq_num = (self._curr_seq_ts, self._curr_seq_num)
+                if self.reSendMsgs:
+                    self._msgHistory.append((seq_num, addr, msg))
                 if addr[0] == MessageEntity.BROADCAST_ID:
                     to_remove = []
                     for re_addr in self._registeredHosts.keys():
@@ -235,10 +228,9 @@ class MessageEntity(ABC):
                 # The sequence numbers wrap around a certain limit, and return to 0
                 self._curr_seq_num = (self._curr_seq_num + 1) % self._seq_num_lim
                 if self._curr_seq_num == 0:
-                    self._seq_num_wrapped = True
-            else:
-                # Putting a None message on the queue means that the target host has to be removed
-                self._remove_host(addr)
+                    # If the sequence number wraps around its limit, we update the session timestamp
+                    self._curr_seq_ts = int(time())
+
 
     def _forward_old_msgs(self, start_seq, addr):
         """
@@ -249,10 +241,9 @@ class MessageEntity(ABC):
         :param addr: address of the target host for forwarding
         """
         self._outputLock.acquire()
-        for m_seq_num, m_time, m_addr, msg in self._msgHistory:
+        for m_seq_num, m_addr, msg in self._msgHistory:
             # The part after the or serves to manage sequence number after wraparound, when the upper limit is reached
-            if (start_seq < m_seq_num or (self._seq_num_wrapped and start_seq - m_seq_num > self._seq_num_lim / 2) or
-                    not self._seq_num_wrapped and self._curr_seq_num < start_seq) and m_addr[0] == MessageEntity.BROADCAST_ID:
+            if start_seq < m_seq_num and m_addr[0] == MessageEntity.BROADCAST_ID:
                 self._outputQueue.append((addr, msg))
         self._outputLock.release()
 
@@ -284,6 +275,43 @@ class MessageEntity(ABC):
             MessageEntity.logger.info('Host %s has encountered an error' % getipport(sock))
             return False
 
+    def _send_msg(self, seq_num, addr, comm):
+        """
+        Private method that sends messages over specific active hosts of the registered hosts list
+
+        :param seq_num: sequence number of the message to be sent in tuple format
+        :param addr: address of the target host
+        :param comm: content of the message. Must be supplied as a dictionary. If None, an empty message with its header
+            only will be sent: this type of messages is used to identify message forwarding requests, with seq_num
+            representing the sequence number of the last valid message received from the host
+        :return: True if the message was successfully sent, False otherwise
+        """
+        # Verifying if the input address has a corresponding open socket
+        try:
+            sock = self._registeredHosts[addr]
+        except KeyError:
+            sock = None
+        # If no valid socket was found for the input address, the message is not sent
+        if sock is None:
+            MessageEntity.logger.error('Cannot send to %s, is not registered' % formatipport(addr))
+            return False
+        if comm is None:
+            # An empty message containing only the header represents a message forwarding request
+            msg = struct.pack('>I', 0) + struct.pack('>I', seq_num[0]) + struct.pack('>I', seq_num[1])
+        else:
+            msg = json.dumps(comm).encode()
+            # Prefix each message with a 4-byte length (network byte order)
+            msg = struct.pack('>I', len(msg)) + struct.pack('>I', seq_num[0]) + struct.pack('>I', seq_num[1]) + msg
+        try:
+            sock.sendall(msg)
+            if self.reSendMsgs and comm is not None:
+                self._update_seq_num(addr, seq_num, received=False)
+            return True
+        except Exception:
+            MessageEntity.logger.error('Exception encountered while sending msg to %s' % getipport(sock))
+            # If an error is encountered during communication, we suppose the host is dead
+            return False
+
     def _recv_msg(self, sock):
         """
         Performs the reception of a message from a given socket. This supposes that the socket has been already flagged
@@ -300,9 +328,10 @@ class MessageEntity(ABC):
             MessageEntity.logger.error('Corrupt message on received from %s' % getipport(sock))
             return None, None
         # Read message sequence number
+        raw_seqnum_ts = self._recvall(sock, 4)
         raw_seqnum = self._recvall(sock, 4)
         msglen = struct.unpack('>I', raw_msglen)[0]
-        seqnum = struct.unpack('>I', raw_seqnum)[0]
+        seqnum = (struct.unpack('>I', raw_seqnum_ts)[0], struct.unpack('>I', raw_seqnum)[0])
 
         if msglen == 0 and self.reSendMsgs:
             # An empty message represents a message forwarding request. Such requests are NOT put on the queue
@@ -399,7 +428,7 @@ class MessageEntity(ABC):
         Refreshes the sequence number associated to a certain connected host
 
         :param addr: The address of the connected host
-        :param seq_num: The sequence number associated to the connected host
+        :param seq_num: The sequence number associated to the connected host, in tuple format
         :param received: If True, then the sequence number refers to a received message, and sent otherwise
         """
         raise NotImplementedError('This method must be implemented')

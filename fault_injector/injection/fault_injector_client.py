@@ -2,7 +2,7 @@ import logging, signal
 from fault_injector.network.client import Client
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.config_tools import ConfigLoader
-from fault_injector.util.misc import formatipport
+from fault_injector.util.misc import formatipport, strtoaddr
 from fault_injector.io.writer import ExecutionLogWriter
 from fault_injector.io.reader import Reader
 from os.path import splitext, basename
@@ -79,6 +79,7 @@ class InjectorClient:
         if hosts is not None:
             if not isinstance(hosts, (list, tuple)):
                 hosts = list(hosts)
+            hosts = [strtoaddr(h) for h in hosts if strtoaddr(h) is not None]
             cl.add_servers(hosts)
         return inj_c
 

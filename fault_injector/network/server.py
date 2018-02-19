@@ -86,7 +86,7 @@ class Server(MessageEntity):
         message forwarding process
 
         :param addr: The address of the connected host
-        :param seq_num: The sequence number associated to the connected host
+        :param seq_num: The sequence number associated to the connected host, in tuple format
         :param received: If True, then the sequence number refers to a received message, and sent otherwise
         """
         pass

@@ -1,6 +1,6 @@
 import select, socket, logging
 from fault_injector.network.msg_entity import MessageEntity
-from fault_injector.util.misc import strtoaddr, formatipport
+from fault_injector.util.misc import formatipport
 from time import time
 
 
@@ -12,29 +12,6 @@ class Client(MessageEntity):
 
     # Logger for the class
     logger = logging.getLogger(__name__)
-
-    # Static definitions for messages regarding the status of a connection
-    CONNECTION_FINALIZED_MSG = -1
-    CONNECTION_LOST_MSG = 0
-    CONNECTION_RESTORED_MSG = 1
-
-    @staticmethod
-    def is_status_message(msg):
-        """
-        Inspects the type of a message received on the queue, and determines if it is a status message
-
-        When connections are lost or restored, status messages are injected into the input queue in order to
-        asynchronously signal the status change. This method allows to determine if a message in the queue is of
-        such type.
-
-        :param msg: The message to be inspected
-        :return: A tuple: the first element is True if msg is a status message, and the second expresses the
-            status change of the connection (depending on the constants defined above)
-        """
-        if isinstance(msg, type(Client.CONNECTION_RESTORED_MSG)):
-            return True, msg
-        else:
-            return False, None
 
     def __init__(self, socket_timeout=10, retry_interval=600, retry_period=30, re_send_msgs=False):
         """
@@ -59,26 +36,22 @@ class Client(MessageEntity):
         """
         Method that opens connection with a specified list of ips/ports of servers
         
-        :param addrs: The addresses of servers to which to connect, in "ip:port" string format
+        :param addrs: The addresses of servers to which to connect, in (ip, port) tuple format
         """
         if addrs is None:
-            Client.logger.warning('You must specify one or more addresses to start the client')
+            Client.logger.error('You must specify one or more addresses to start the client')
             return
         if not isinstance(addrs, (list, tuple)):
             addrs = [addrs]
-        for str_addr in addrs:
-                addr = strtoaddr(str_addr)
-                if addr is not None:
-                    try:
-                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                        sock.connect((socket.gethostbyname(addr[0]), addr[1]))
-                        self._register_host(sock)
-                        Client.logger.info('Successfully connected to server %s' % str_addr)
-                    except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError, socket.gaierror):
-                        Client.logger.warning('Could not connect to %s' % str_addr)
-                        pass
-                else:
-                    Client.logger.error('Address %s is malformed' % str_addr)
+        for addr in addrs:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.connect((socket.gethostbyname(addr[0]), addr[1]))
+                self._register_host(sock)
+                Client.logger.info('Successfully connected to server %s' % formatipport(addr))
+            except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError, socket.gaierror):
+                Client.logger.warning('Could not connect to %s' % formatipport(addr))
+                pass
 
     def _listen(self):
         """
@@ -122,7 +95,7 @@ class Client(MessageEntity):
         :param received: If True, then the sequence number refers to a received message, and sent otherwise
         """
         if addr not in self._seq_nums:
-            self._seq_nums[addr] = [seq_num, -1] if received else [-1, seq_num]
+            self._seq_nums[addr] = [seq_num, None] if received else [None, seq_num]
             return
         # We do not check for the value of the new sequence number. This can be done because, since we are using TCP,
         # we expect data to arrive in the same order as it was originally sent, thus resulting in increasing seq nums
@@ -140,7 +113,7 @@ class Client(MessageEntity):
         """
         super(Client, self)._remove_host(address)
         # When connection is lost, we inject a status message for that host in the input queue
-        self._add_to_input_queue(address, Client.CONNECTION_LOST_MSG)
+        self._add_to_input_queue(address, MessageEntity.CONNECTION_LOST_MSG)
         if not now and address not in self._dangling:
             first_time = time() - self.retry_period
             # This list contains two items: the timestamp of when connection was lost, and the timestamp of the last
@@ -160,7 +133,7 @@ class Client(MessageEntity):
             for addr, time_list in self._dangling.items():
                 # If a dangling host has passed its retry interval, we remove it completely
                 if time_now - time_list[1] > self.retry_interval:
-                    self._add_to_input_queue(addr, Client.CONNECTION_FINALIZED_MSG)
+                    self._add_to_input_queue(addr, MessageEntity.CONNECTION_FINALIZED_MSG)
                     to_pop.append(addr)
                 # We retry establishing a connection with the dangling host
                 elif time_now - time_list[0] >= self.retry_period:
@@ -174,7 +147,7 @@ class Client(MessageEntity):
                             self._send_msg(self._seq_nums[addr][0], addr, None)
                         to_pop.append(addr)
                         # When connection is re-established, we inject a status message for that host in the input queue
-                        self._add_to_input_queue(addr, Client.CONNECTION_RESTORED_MSG)
+                        self._add_to_input_queue(addr, MessageEntity.CONNECTION_RESTORED_MSG)
                         Client.logger.info('Connection to server %s was successfully restored' % formatipport(addr))
                     except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError):
                         pass
