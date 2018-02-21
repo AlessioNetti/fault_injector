@@ -191,6 +191,7 @@ class InjectorClient:
                         now_timestamp_abs = time()
                         self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(now_timestamp_abs)))
                         self._writers[addr].write_entry(MessageBuilder.status_connection(now_timestamp_abs, restored=True))
+                        # If the ack msg contains an error, it means all previously running tasks have been lost
                         if MessageBuilder.FIELD_ERR in msg:
                             self._pendingTasks[addr] = set()
                             self._writers[addr].write_entry(MessageBuilder.status_reset(msg[MessageBuilder.FIELD_TIME]))
@@ -245,7 +246,12 @@ class InjectorClient:
 
         addrs = self._client.get_registered_hosts()
         self._writers = {}
+        self._outputsDirs = {}
         for addr in addrs:
+            self._outputsDirs[addr] = format_output_directory(self._resultsDir, addr)
+            # The outputs directory needs to be flushed before starting the new injection session
+            if isdir(self._outputsDirs[addr]):
+                rmtree(self._outputsDirs[addr], ignore_errors=True)
             # We create an execution log writer for each connected host
             self._writers[addr] = ExecutionLogWriter(format_injection_filename(self._resultsDir, addr))
 
@@ -254,9 +260,10 @@ class InjectorClient:
             addr, msg = self._client.pop_msg_queue()
             # We process status messages for connections that are in the queue
             is_status, status = Client.is_status_message(msg)
-            if is_status:
-                # If connection has been lost or re-established with an host, we log the event
-                self._writers[addr].write_entry(MessageBuilder.status_connection(time(), restored=status))
+            if is_status and status == Client.CONNECTION_LOST_MSG:
+                self._writers[addr].write_entry(MessageBuilder.status_connection(time()))
+            elif is_status and status == Client.CONNECTION_RESTORED_MSG:
+                self._writers[addr].write_entry(MessageBuilder.status_connection(time(), restored=True))
             else:
                 # Messages are popped from the input queue, and their content stored
                 self._writers[addr].write_entry(msg)
@@ -266,6 +273,7 @@ class InjectorClient:
                 elif msg_type == MessageBuilder.STATUS_END:
                     InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
                         msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                    self._write_task_output(addr, msg)
                 elif msg_type == MessageBuilder.STATUS_ERR:
                     InjectorClient.logger.warning("Task %s terminated with error code %s on host %s" % (
                         msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))

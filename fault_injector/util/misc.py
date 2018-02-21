@@ -37,7 +37,7 @@ def format_output_filename(results_dir, msg):
     return results_dir + OUT_PREFIX + format_task_filename(msg) + '.log'
 
 
-def format_output_directory(results_dir, addr, workload_name):
+def format_output_directory(results_dir, addr, workload_name=None):
     """
     Returns a string used to name the output log directory, containing all logs related to tasks executed in
     an injection session.
@@ -47,7 +47,10 @@ def format_output_directory(results_dir, addr, workload_name):
     :param workload_name: The name of the workload
     :return: A string used to name the output log directory
     """
-    return results_dir + OUT_PREFIX + workload_name + '-' + addr[0] + '_' + str(addr[1])
+    if workload_name is not None:
+        return results_dir + OUT_PREFIX + workload_name + '-' + addr[0] + '_' + str(addr[1])
+    else:
+        return results_dir + OUT_PREFIX + addr[0] + '_' + str(addr[1])
 
 
 def format_task_filename(msg):
