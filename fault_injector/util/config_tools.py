@@ -8,6 +8,7 @@ class ConfigLoader:
 
     _dfl_config = {
         "RESULTS_DIR": "results",
+        "SUDO_PSW": None,
         "SKIP_EXPIRED": True,
         "RETRY_TASKS": True,
         "ABRUPT_TASK_KILL": True,

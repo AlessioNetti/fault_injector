@@ -9,7 +9,7 @@ int child_pid = 0, parent_pid = 0, child_status = 0;
 
 void signal_handler(int sig_number)
 {
-    if(sig_number == SIGALRM)
+    if(sig_number == SIGALRM || sig_number == SIGINT || sig_number == SIGTERM)
     {
         if(child_pid != 0)
         {
@@ -50,6 +50,8 @@ int main (int argc, char *argv[])
 
     parent_pid = getpid();
     signal(SIGALRM, signal_handler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     alarm(duration);
 
     while(1)
@@ -70,7 +72,7 @@ int main (int argc, char *argv[])
                 if(my_array == NULL || getppid() == parent_pid)
                 {
                     //printf("Null array returned\n");
-                    return 0;
+                    return -1;
                 }
                 else
                     for(i=0;i<array_size-array_size_old;i++)

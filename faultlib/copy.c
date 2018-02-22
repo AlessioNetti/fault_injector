@@ -9,7 +9,7 @@ char *file_name = "injection_temp_file";
 
 void signal_handler(int sig_number)
 {
-    if(sig_number == SIGALRM || sig_number == SIGINT)
+    if(sig_number == SIGALRM || sig_number == SIGINT || sig_number == SIGTERM)
     {
         if(in != NULL)
             fclose(in);
@@ -46,6 +46,7 @@ int main (int argc, char *argv[])
 
     signal(SIGALRM, signal_handler);
     signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     alarm(duration);
 
     for(i=0;i<file_size_base;i++)

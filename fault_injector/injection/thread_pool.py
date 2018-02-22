@@ -92,7 +92,7 @@ class ThreadWrapper(Thread):
         if self._process is not None:
             self._process.poll()
             if self._process.returncode is None:
-                self._process.kill()
+                self._process.terminate()
                 self._process.wait()
         self._lock.release()
 
@@ -250,7 +250,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, psw=None):
         """
         Constructor for the class
         
@@ -261,6 +261,7 @@ class InjectionThreadPool(ThreadPool):
             re-executed
         :param log_outputs: Boolean flag. If True, the command line outputs of each task will be tracked and sent to
             all connected hosts upon termination
+        :param psw: password to grant root access to tasks. *USE ONLY WHEN STRICTLY NECESSARY*
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
@@ -268,6 +269,7 @@ class InjectionThreadPool(ThreadPool):
         self._skip_expired = skip_expired
         self._retry_tasks = retry_tasks
         self._log_outputs = log_outputs
+        self._psw = psw
         # This flag determines whether we are running in a posix system or not. Used for shell argument parsing
         self._posix_shell = os.name == 'posix'
         # Timestamps for the starting time of the injection session in absolute and relative time
@@ -309,7 +311,7 @@ class InjectionThreadPool(ThreadPool):
         Method that terminates the thread pool, joining all currently running threads
         
         :param kill_abruptly: Boolean flag. If True running tasks, at the moment termination of the pool is requested,
-            will be killed abruptly with process.kill(), without waiting for their termination
+            will be killed abruptly with process.terminate(), without waiting for their termination
         """
         if self._initialized:
             # First of all, we flag all threads for termination
@@ -358,8 +360,10 @@ class InjectionThreadPool(ThreadPool):
             return
         # We parse the arguments sequence for the command of the task, supplied as string in the message
         task_args = split(task.args, posix=self._posix_shell)
-        task_duration = task.duration
+        if task.duration == 0 and task.isFault:
+            InjectionThreadPool.logger.warning('Task %s is a fault but has undefined duration.', task.args)
         # If the task has no expected duration, no timeout is set
+        task_duration = task.duration
         task_timeout = task_duration if task_duration != Task.VALUE_DUR_NO_LIM else None
         task_end_time = None
         task_start_time = time()
@@ -374,13 +378,15 @@ class InjectionThreadPool(ThreadPool):
         elif p is None:
             # The thread may have been woken up because the pool must be terminated; in that case, we return
             return
+        outdata = ''
         InjectionThreadPool.logger.info('Executing new task %s' % task.args)
         # All connected hosts are informed that the task has been started
         self._inform_start(task, task_start_time)
         rcode = 0
         try:
             # If there is no timeout for the task, we just wait for its termination and store its return code
-            if task_timeout is None:
+            # Same applies if we do not retry tasks finishing before their timeout
+            if task_timeout is None or not self._retry_tasks:
                 p.wait(timeout=task_timeout)
                 task_end_time = time()
                 rcode = p.returncode
@@ -394,20 +400,22 @@ class InjectionThreadPool(ThreadPool):
                     # a new task identical to the first one: its timeout is the remaining time left for execution
                     # according to the original expected duration
                     task_timeout = task_duration - (task_end_time - task_start_time)
-                    if self._retry_tasks and task_timeout > 0:
+                    if task_timeout > 0:
                         if rcode != 0:
                             InjectionThreadPool.logger.warning('Sub-task %s terminated unexpectedly' % task.args)
+                        outdata_part = p.communicate()[0]
+                        if outdata_part is not None:
+                            outdata += outdata_part.decode(stdout.encoding)
                         p = current_thread().start_process(args=task_args, stdout=PIPE)
-                    else:
-                        break
         # If the task has not terminated by its timeout, we just kill the process and collect the result
         except TimeoutExpired:
             current_thread().force_stop_process()
             task_end_time = time()
             rcode = 0
         # We capture the output of the executed task
-        outdata = p.communicate()[0]
-        outdata = outdata.decode(stdout.encoding) if outdata is not None else ''
+        outdata_part = p.communicate()[0]
+        if outdata_part is not None:
+            outdata += outdata_part.decode(stdout.encoding)
         # All of the connected peers are informed of the termination of the task
         self._process_result(task, task_end_time, rcode, outdata)
         # Logging is done according to the return code of the task

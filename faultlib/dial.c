@@ -10,7 +10,7 @@
 
 void signal_handler(int sig_number)
 {
-    if(sig_number == SIGALRM)
+    if(sig_number == SIGALRM || sig_number == SIGINT || sig_number == SIGTERM)
     {
         //printf("Exiting\n");
         exit(0);
@@ -44,6 +44,8 @@ int main (int argc, char *argv[])
 
     srand(time(NULL));
     signal(SIGALRM, signal_handler);
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
     alarm(duration);
 
     //printf("Starting ALU interference\n");

@@ -32,10 +32,10 @@ class InjectorServer:
 
         se = Server(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
-                               retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'])
+                               retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'], psw=cfg['SUDO_PSW'])
         return inj_s
 
-    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True):
+    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True, psw=None):
         """
         Constructor for the class
         
@@ -45,6 +45,7 @@ class InjectorServer:
         :param retry_tasks: Boolean flag. See InjectionThreadPool for details
         :param kill_abruptly: Boolean flag. See InjectionThreadPool for details
         :param log_outputs: Boolean flag. See InjectionThreadPool for details
+        :param psw: password to grant root access to tasks. *USE ONLY WHEN STRICTLY NECESSARY*
         """
         assert isinstance(serverobj, Server), 'InjectorServer needs a Server object in its constructor!'
         self._server = serverobj
@@ -52,7 +53,7 @@ class InjectorServer:
         self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
         self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
-                                         retry_tasks=retry_tasks, log_outputs=log_outputs)
+                                         retry_tasks=retry_tasks, log_outputs=log_outputs, psw=psw)
 
     def listen(self):
         """
