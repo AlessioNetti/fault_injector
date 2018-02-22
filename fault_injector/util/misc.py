@@ -61,7 +61,7 @@ def format_task_filename(msg):
     :return: A string representing the filename of the output log for the task
     """
     task_name = msg[MessageBuilder.FIELD_DATA].replace('sudo', '').replace('./', '')
-    return task_name.split(' ')[0] + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
+    return task_name.strip().split(' ')[0] + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
 
 
 def getipport(sock):

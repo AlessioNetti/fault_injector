@@ -65,18 +65,20 @@ class ThreadWrapper(Thread):
         self._lock.release()
         return st
 
-    def start_process(self, **kwargs):
+    def start_process(self, args, root=False, **kwargs):
         """
         Starts a subprocess, if the thread has not been flagged for termination
         
+        :param args: arguments of the task as list
+        :param root: If True, the process can obtain superuser rights
         :param kwargs: All of the arguments supported by Popen
         :return: a Popen object if successful, None otherwise
         """
         self._lock.acquire()
         p = None
-        if not self._hasToFinish:
+        if not self._hasToFinish and (args[0] != 'sudo' or root):
             try:
-                p = subprocess.Popen(**kwargs)
+                p = subprocess.Popen(args=args, **kwargs)
                 self._process = p
             except(OSError, FileNotFoundError):
                 self._process = None
@@ -250,7 +252,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, psw=None):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False):
         """
         Constructor for the class
         
@@ -261,7 +263,8 @@ class InjectionThreadPool(ThreadPool):
             re-executed
         :param log_outputs: Boolean flag. If True, the command line outputs of each task will be tracked and sent to
             all connected hosts upon termination
-        :param psw: password to grant root access to tasks. *USE ONLY WHEN STRICTLY NECESSARY*
+        :param root: if True, tasks requiring superuser rights (sudo) are allowed to run. Requires password-less root
+            access to be set on the host OS
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
@@ -269,7 +272,7 @@ class InjectionThreadPool(ThreadPool):
         self._skip_expired = skip_expired
         self._retry_tasks = retry_tasks
         self._log_outputs = log_outputs
-        self._psw = psw
+        self._root = root
         # This flag determines whether we are running in a posix system or not. Used for shell argument parsing
         self._posix_shell = os.name == 'posix'
         # Timestamps for the starting time of the injection session in absolute and relative time
@@ -368,12 +371,12 @@ class InjectionThreadPool(ThreadPool):
         task_end_time = None
         task_start_time = time()
         # We spawn a subprocess running the task with its arguments
-        p = current_thread().start_process(args=task_args, stdout=PIPE)
+        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE)
         if p is None and not current_thread().has_to_terminate():
             # If no subprocess was spawned even if the thread has not been flagged for termination, it means there
             # was an error
-            InjectionThreadPool.logger.error('Error while starting task %s, check if path is correct', task.args)
-            self._process_result(task, time(), -1)
+            InjectionThreadPool.logger.error('Error while starting task %s, check if command is correct', task.args)
+            self._process_result(task, task_start_time, -1)
             return
         elif p is None:
             # The thread may have been woken up because the pool must be terminated; in that case, we return
@@ -385,8 +388,7 @@ class InjectionThreadPool(ThreadPool):
         rcode = 0
         try:
             # If there is no timeout for the task, we just wait for its termination and store its return code
-            # Same applies if we do not retry tasks finishing before their timeout
-            if task_timeout is None or not self._retry_tasks:
+            if task_timeout is None:
                 p.wait(timeout=task_timeout)
                 task_end_time = time()
                 rcode = p.returncode
@@ -400,13 +402,15 @@ class InjectionThreadPool(ThreadPool):
                     # a new task identical to the first one: its timeout is the remaining time left for execution
                     # according to the original expected duration
                     task_timeout = task_duration - (task_end_time - task_start_time)
-                    if task_timeout > 0:
+                    if self._retry_tasks and task_timeout > 0:
                         if rcode != 0:
                             InjectionThreadPool.logger.warning('Sub-task %s terminated unexpectedly' % task.args)
                         outdata_part = p.communicate()[0]
                         if outdata_part is not None:
                             outdata += outdata_part.decode(stdout.encoding)
-                        p = current_thread().start_process(args=task_args, stdout=PIPE)
+                        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE)
+                    else:
+                        break
         # If the task has not terminated by its timeout, we just kill the process and collect the result
         except TimeoutExpired:
             current_thread().force_stop_process()
