@@ -45,13 +45,13 @@ int main (int argc, char *argv[])
             array_size = array_size_base * high_intensity;
     }
 
-    reference_array = (char*)malloc(array_size * sizeof(char));
-    for(i=0; i < array_size; i++)
-        reference_array[i] = (char)((i + 57) % 26);
-
     parent_pid = getpid();
     signal(SIGALRM, signal_handler);
     alarm(duration);
+
+    reference_array = (char*)malloc(array_size * sizeof(char));
+    for(i=0; i < array_size; i++)
+        reference_array[i] = (char)((i + 57) % 26);
 
     while(1)
     {

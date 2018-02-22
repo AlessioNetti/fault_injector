@@ -6,24 +6,16 @@
 
 FILE *in=NULL, *out=NULL;
 char *file_name = "injection_temp_file";
-char *my_string = "FLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\n"
-                  "FLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\n"
-                  "FLOODING_THE_FILESYSTEM\nFLOODING_THE_FILESYSTEM\n";
 
 void signal_handler(int sig_number)
 {
     if(sig_number == SIGALRM || sig_number == SIGINT)
     {
         if(in != NULL)
-        {
             fclose(in);
-            remove(file_name);
-        }
         else if(out != NULL)
-        {
             fclose(out);
-            remove(file_name);
-        }
+        remove(file_name);
         //printf("Exiting\n");
         exit(0);
     }
@@ -32,9 +24,9 @@ void signal_handler(int sig_number)
 // This program generates interference on the ALU by performing floating-point operations
 int main (int argc, char *argv[])
  {
-    int file_size_base = 1048576, file_size = 0, my_len = 0, num_done = 0, buf_len = 2048, i;
-    char *end, buffer[buf_len];
-    int low_intensity = 1, high_intensity = 2;
+    int file_size_base = 1048576, file_size = 0, num_done = 0, i;
+    char *end, buf_in[file_size_base], buf_out[file_size_base];
+    int low_intensity = 1, high_intensity = 2, num_copies = 200;
     int duration = 0, sleep_period = 2;
 
     if (argc <= 1)
@@ -47,15 +39,18 @@ int main (int argc, char *argv[])
         duration = (int)strtoll(argv[1], &end, 10);
         //printf("Starting with %i dur\n", duration);
         if(argc == 3 && strcmp(argv[2], "l") == 0)
-            file_size = file_size_base * low_intensity;
+            file_size = num_copies * low_intensity;
         else
-            file_size =  file_size_base * high_intensity;
+            file_size =  num_copies * high_intensity;
     }
 
-    my_len = strlen(my_string);
     signal(SIGALRM, signal_handler);
     signal(SIGINT, signal_handler);
     alarm(duration);
+
+    for(i=0;i<file_size_base;i++)
+        buf_out[i] = 'a';
+        buf_in[i] = 'b';
 
     //printf("Starting Disk IO interference\n");
     while(1)
@@ -63,7 +58,7 @@ int main (int argc, char *argv[])
         out = fopen(file_name, "w");
         for(i=0;i<file_size;i++)
         {
-            num_done = fwrite(my_string, sizeof(char), my_len, out);
+            num_done = fwrite(buf_out, sizeof(char), file_size_base, out);
             if(num_done == 0)
                 break;
         }
@@ -74,7 +69,7 @@ int main (int argc, char *argv[])
         in = fopen(file_name, "r");
         do
         {
-            num_done = fread(buffer, sizeof(char), buf_len, in);
+            num_done = fread(buf_in, sizeof(char), file_size_base, in);
         }
         while(num_done > 0);
         fclose(in);
