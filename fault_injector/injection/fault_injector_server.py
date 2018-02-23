@@ -31,11 +31,11 @@ class InjectorServer:
             port = cfg['SERVER_PORT']
 
         se = Server(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
-        inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
-                               retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'])
+        inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'], retry_tasks=cfg['RETRY_TASKS'],
+                               kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'], numa_cores=cfg['NUMA_CORES'])
         return inj_s
 
-    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True, root=False):
+    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True, root=False, numa_cores=()):
         """
         Constructor for the class
         
@@ -46,6 +46,7 @@ class InjectorServer:
         :param kill_abruptly: Boolean flag. See InjectionThreadPool for details
         :param log_outputs: Boolean flag. See InjectionThreadPool for details
         :param root: Boolean flag. See InjectionThreadPool for details
+        :param numa_cores: See InjectionThreadPool for details
         """
         assert isinstance(serverobj, Server), 'InjectorServer needs a Server object in its constructor!'
         self._server = serverobj
@@ -53,7 +54,7 @@ class InjectorServer:
         self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
         self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
-                                         retry_tasks=retry_tasks, log_outputs=log_outputs, root=root)
+                                         retry_tasks=retry_tasks, log_outputs=log_outputs, root=root, numa_cores=numa_cores)
 
     def listen(self):
         """

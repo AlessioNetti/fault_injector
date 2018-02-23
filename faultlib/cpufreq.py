@@ -6,7 +6,7 @@ import signal, sys
 perf_gov = 'performance'
 ps_gov = 'powersave'
 cpu_start = 0
-cpu_end = 20
+cpu_end = 16
 
 
 def signal_handler(signum, frame):

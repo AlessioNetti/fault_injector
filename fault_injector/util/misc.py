@@ -7,6 +7,27 @@ INJ_PREFIX = '/injection-'
 OUT_PREFIX = '/output-'
 LIST_PREFIX = '/listening-'
 
+SUDO_ID = 'sudo'
+BASE_NUMA_COMMAND = 'numactl'
+OPT_NUMA_COMMAND = '--physcpubind='
+NUMA_SEP = ','
+
+
+def format_numa_command(arglist, cores):
+    """
+    Formats an ordinary command to be preceded by a NUMA policy command, specifying the cores on which to run.
+    
+    :param arglist: the list of arguments of the command
+    :param cores: the list of cores to be included in the NUMA policy
+    :return: the formatted arguments list
+    """
+    if len(cores) > 0:
+        corestring = NUMA_SEP.join(str(el) for el in cores)
+        numalist = [BASE_NUMA_COMMAND, OPT_NUMA_COMMAND+corestring]
+        return numalist + arglist
+    else:
+        return arglist
+
 
 def format_injection_filename(results_dir, addr, workload_name=None):
     """
@@ -60,7 +81,7 @@ def format_task_filename(msg):
     :param msg: A message dictionary
     :return: A string representing the filename of the output log for the task
     """
-    task_name = msg[MessageBuilder.FIELD_DATA].replace('sudo', '').replace('./', '')
+    task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace('./', '')
     return task_name.strip().split(' ')[0] + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
 
 

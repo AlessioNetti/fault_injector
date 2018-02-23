@@ -1,7 +1,7 @@
 timestamp, duration, seqNum, isFault, 							args 
  		0, 		  0, 	  1,   False,    						  ls 
 	   10, 		  0,	  2,   False, 	 					  ls -la
-	   25, 		  5, 	  3,  	True, 	 			 ping google.com
+	   25, 		  5, 	  3,   False, 	 			 ping google.com
 	   40, 		  0, 	  4,   False, 	 					 tkss -l
  	   50, 		  0, 	  5,   False,    						  ls 
 	   60, 		  0,	  6,   False, 	 					  ls -la
@@ -22,7 +22,7 @@ timestamp, duration, seqNum, isFault, 							args
  	21650, 		  0, 	 21,   False,    						  ls 
 	21660, 		  0,	 22,   False, 	 					  ls -la
 	21680, 		  0, 	 23,  	True, 	 			 		   ls -l
-	21690, 		 10, 	 24,    True, 	 			 ping github.com
+	21690, 		 10, 	 24,   False, 	 			 ping github.com
 	32400, 		  0, 	 25,   False,    						  ls 
 	32410, 		  0,	 26,   False, 	 					  ls -la
 	32425, 		  5, 	 27,  	True, 	 			 ping google.com
@@ -46,7 +46,7 @@ timestamp, duration, seqNum, isFault, 							args
  	54050, 		  0, 	 45,   False,    						  ls 
 	54060, 		  0,	 46,   False, 	 					  ls -la
 	54080, 		  0, 	 47,  	True, 	 			 		   ls -l
-	54090, 		 10, 	 48,    True, 	 			 ping github.com
+	54090, 		 10, 	 48,   False, 	 			 ping github.com
 	64800, 		  0, 	 49,   False,    						  ls 
 	64810, 		  0,	 50,   False, 	 					  ls -la
 	64825, 		  5, 	 51,  	True, 	 			 ping google.com
@@ -70,7 +70,7 @@ timestamp, duration, seqNum, isFault, 							args
  	86450, 		  0, 	 69,   False,    						  ls 
 	86460, 		  0,	 70,   False, 	 					  ls -la
 	86480, 		  0, 	 71,  	True, 	 			 		   ls -l
-	86490, 		 10, 	 72,    True, 	 			 ping github.com
+	86490, 		 10, 	 72,   False, 	 			 ping github.com
    108000, 		  0, 	 73,   False,    						  ls 
    108010, 		  0,	 74,   False, 	 					  ls -la
    108025, 		  5, 	 75,  	True, 	 			 ping google.com
@@ -89,7 +89,7 @@ timestamp, duration, seqNum, isFault, 							args
    129690, 		 10, 	 88,    True, 	 			 ping github.com
    151200, 		  0, 	 89,   False,    						  ls 
    151210, 		  0,	 90,   False, 	 					  ls -la
-   151225, 		  5, 	 91,  	True, 	 			 ping google.com
+   151225, 		  5, 	 91,   False, 	 			 ping google.com
    151240, 		  0, 	 92,   False, 	 					 tkss -l
    151250, 		  0, 	 93,   False,    						  ls 
    151260, 		  0,	 94,   False, 	 					  ls -la

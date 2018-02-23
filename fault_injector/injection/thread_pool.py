@@ -7,6 +7,7 @@ from collections import deque
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
+from fault_injector.util.misc import format_numa_command, SUDO_ID
 from sys import stdout
 from shlex import split
 
@@ -76,7 +77,7 @@ class ThreadWrapper(Thread):
         """
         self._lock.acquire()
         p = None
-        if not self._hasToFinish and (args[0] != 'sudo' or root):
+        if not self._hasToFinish and (root or not any(arg == SUDO_ID for arg in args)):
             try:
                 p = subprocess.Popen(args=args, **kwargs)
                 self._process = p
@@ -252,7 +253,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=()):
         """
         Constructor for the class
         
@@ -265,9 +266,11 @@ class InjectionThreadPool(ThreadPool):
             all connected hosts upon termination
         :param root: if True, tasks requiring superuser rights (sudo) are allowed to run. Requires password-less root
             access to be set on the host OS
+        :param numa_cores: The list of core IDs to be used by the NUMA policy (if available)
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
+        self._numa_cores = numa_cores
         self._server = msg_server
         self._skip_expired = skip_expired
         self._retry_tasks = retry_tasks
@@ -363,6 +366,8 @@ class InjectionThreadPool(ThreadPool):
             return
         # We parse the arguments sequence for the command of the task, supplied as string in the message
         task_args = split(task.args, posix=self._posix_shell)
+        # Formats the command so that it can be run with a specific NUMA policy (assigned cores)
+        task_args = format_numa_command(task_args, self._numa_cores)
         if task.duration == 0 and task.isFault:
             InjectionThreadPool.logger.warning('Task %s is a fault but has undefined duration.', task.args)
         # If the task has no expected duration, no timeout is set
