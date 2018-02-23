@@ -61,6 +61,7 @@ class InjectorClient:
         self._start_timestamp_now = 0
         # We register the signal handler for termination requested by the user
         signal.signal(signal.SIGINT, self._signalhandler)
+        signal.signal(signal.SIGTERM, self._signalhandler)
 
     @staticmethod
     def build(config=None, hosts=None):
@@ -411,7 +412,7 @@ class InjectorClient:
         """
         A signal handler to perform a graceful exit procedure on SIGINT 
         """
-        if sig == signal.SIGINT:
+        if sig == signal.SIGINT or sig == signal.SIGTERM:
             if self._writers is not None:
                 for w in self._writers.values():
                     w.close()

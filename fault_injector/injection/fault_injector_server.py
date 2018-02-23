@@ -61,6 +61,7 @@ class InjectorServer:
         Listens for incoming fault injection requests and executes them 
         """
         signal.signal(signal.SIGINT, self._signalhandler)
+        signal.signal(signal.SIGTERM, self._signalhandler)
         self._server.start()
         self._pool.start()
         while True:
@@ -143,7 +144,7 @@ class InjectorServer:
         """
         A signal handler to perform a graceful exit procedure on SIGINT 
         """
-        if sig == signal.SIGINT:
+        if sig == signal.SIGINT or sig == signal.SIGTERM:
             InjectorServer.logger.info('Exit requested by user. Cleaning up...')
             self._pool.stop(kill_abruptly=self._kill_abruptly)
             self._server.stop()

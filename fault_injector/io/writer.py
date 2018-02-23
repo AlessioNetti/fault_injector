@@ -84,6 +84,7 @@ class CSVWriter(Writer):
         try:
             d = Task.task_to_dict(entry)
             self._writer.writerow(d)
+            self._wfile.flush()
             return True
         except (StopIteration, IOError):
             self._wfile.close()
@@ -143,6 +144,7 @@ class ExecutionLogWriter(Writer):
             return False
         try:
             self._writer.writerow(entry)
+            self._wfile.flush()
             return True
         except (StopIteration, IOError):
             self._wfile.close()
