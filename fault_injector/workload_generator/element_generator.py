@@ -7,10 +7,11 @@ import numpy as np
 
 class ElementPicker:
 
-    def __init__(self):
+    def __init__(self, trim_zeros=True):
         self._dist = None
         self._data = None
-        self._max_tries = 10000
+        self._trimZeros = trim_zeros
+        self._maxTries = 10000
 
     def set_distribution(self, dist):
         if dist is not None and isinstance(dist, rv_frozen):
@@ -29,11 +30,9 @@ class ElementPicker:
             dist_params = dist.fit(data)
             self._dist = dist(*dist_params)
 
-    def show_fit(self, range=None):
-        if range is None or not isinstance(range, (tuple, list)) or len(range) < 2:
-            range = (1, 10)
+    def show_fit(self, val_range=(1, 10)):
         num_points = 1000
-        xpoints = np.linspace(range[0], range[1], num_points)
+        xpoints = np.linspace(val_range[0], val_range[1], num_points)
 
         fig, ax = plt.subplots(figsize=(7, 5))
 
@@ -41,9 +40,19 @@ class ElementPicker:
             ax.hist(self._data, normed=True)
         if self._dist is not None:
             plt.plot(xpoints, self._dist.pdf(xpoints))
-        ax.set_xlim(left=range[0], right=range[1], emit=True, auto=False)
-        plt.title("Fit of the Distribution")
+            plt.title("Fit of the distribution")
+        else:
+            plt.title("No distribution currently set")
+        ax.set_xlim(left=val_range[0], right=val_range[1], emit=True, auto=False)
         plt.show()
 
     def pick(self):
-        return self._dist.rvs() if self._dist is not None else None
+        el = self._dist.rvs() if self._dist is not None else None
+        if el is not None and self._trimZeros and el <= 0:
+            tries = 1
+            while el <= 0 and tries < self._maxTries:
+                el = self._dist.rvs()
+                tries += 1
+            if tries >= self._maxTries:
+                raise RuntimeError('Max number of tries reached while trimming negative numbers from the distribution!')
+        return el

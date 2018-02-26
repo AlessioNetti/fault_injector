@@ -13,14 +13,14 @@ size = 1000
 span = 3600 * 48
 
 if __name__ == '__main__':
-    generator = WorkloadGenerator(path=out, limit_size=size, limit_span=span)
+    generator = WorkloadGenerator(path=out)
 
-    generator.durationGenerator.set_distribution(norm(loc=60, scale=5))
-    #generator.durationGenerator.show_fit((10, 120))
+    generator.faultDurGenerator.set_distribution(norm(loc=60, scale=6))
+    generator.faultDurGenerator.show_fit((10, 120))
 
-    generator.timeGenerator.set_distribution(exponweib(a=10, c=1, loc=0, scale=1))
-    #generator.timeGenerator.show_fit((-10, 10))
+    generator.faultTimeGenerator.set_distribution(exponweib(a=10, c=1, loc=300, scale=15))
+    generator.faultTimeGenerator.show_fit((300, 400))
 
-    generator.generate(faults, None)
+    #generator.generate(faults, None)
 
     exit()
