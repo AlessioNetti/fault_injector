@@ -62,11 +62,13 @@ class CSVWriter(Writer):
         super().__init__(path)
         # The fields of the output file always correspond to those of the Task class
         self._fieldnames = sorted(list(vars(Task())))
+        fieldict = {k: k for k in self._fieldnames}
         self._wfile = None
         try:
             self._wfile = open(self._path, 'w')
             self._writer = csv.DictWriter(self._wfile, fieldnames=self._fieldnames, delimiter=CSVWriter.DELIMITER_CHAR,
                                           quotechar=CSVWriter.QUOTE_CHAR)
+            self._writer.writerow(fieldict)
         except (FileNotFoundError, IOError):
             CSVWriter.logger.error('Cannot write workload to path %s' % self._path)
             self._writer = None
@@ -79,7 +81,7 @@ class CSVWriter(Writer):
         :return: True if successful, False otherwise
         """
         if self._writer is None or not isinstance(entry, Task):
-            CSVWriter.logger.error('Input Task to write_entry is malformed')
+            CSVWriter.logger.error('Input Task to write_entry is malformed, or path not valid')
             return False
         try:
             d = Task.task_to_dict(entry)

@@ -7,15 +7,15 @@ from random import uniform
 
 class WorkloadGenerator:
 
-    def __init__(self, path, limit_size=1000, limit_span=86400, rr_selection=False, fault_overlap=False):
-        self._rr = rr_selection
+    def __init__(self, path, busy_time=0.75, rr_benches=False, rr_faults=False, fault_overlap=False):
+        self._rr_fault = rr_faults
+        self._rr_bench = rr_benches
+        self._busy_time = busy_time
         self._fault_overlap = fault_overlap
-        self._size = limit_size
-        self._span = limit_span
         self._path = path
         self._timeGenerator = ElementPicker()
         self._durationGenerator = ElementPicker()
-        self._durationGenerator.set_distribution(norm, 300, 2)
+        self._durationGenerator.set_distribution(norm(300, 2))
         self._rr_indexes = {}
 
     @property
@@ -34,14 +34,16 @@ class WorkloadGenerator:
     def durationGenerator(self, el):
         pass
 
-    def generate(self, faults, benchmarks):
-        writer = CSVWriter(self._path)
+    def generate(self, faults, benchmarks, size_limit=1000, span_limit=None):
+        if size_limit is None and span_limit is None:
+            raise AttributeError('Size limit and Span limit cannot be both None!')
 
+        writer = CSVWriter(self._path)
         cur_size = 0
         cur_span = 0
         cur_dur = 0
 
-        while cur_size < self._size and cur_span < self._span:
+        while (size_limit is None or cur_size < size_limit) and (span_limit is None or cur_span < span_limit):
             next_ttf = self.timeGenerator.pick()
             while not self._fault_overlap and cur_dur >= next_ttf:
                 next_ttf += self.timeGenerator.pick()
@@ -52,21 +54,21 @@ class WorkloadGenerator:
                 cur_dur = self.durationGenerator.pick()
 
             t = Task()
-            t.duration = cur_dur
-            t.timestamp = cur_span
+            t.duration = int(cur_dur)
+            t.timestamp = int(cur_span)
             t.isFault = True
             t.seqNum = cur_size
-            t.args = self._pick_entry(faults).format(cur_dur)
+            t.args = self._pick_entry(faults, self._rr_fault).format(t.duration)
             writer.write_entry(t)
 
             cur_size += 1
 
         writer.close()
 
-    def _pick_entry(self, l):
-        if self._rr:
-            el = l[self._rr_indexes[l]]
-            self._rr_indexes[l] = (self._rr_indexes[l] + 1) % len(l)
+    def _pick_entry(self, l, rr):
+        if rr:
+            el = l[self._rr_indexes[id(l)]]
+            self._rr_indexes[id(l)] = (self._rr_indexes[id(l)] + 1) % len(l)
         else:
             idx = int(uniform(0, len(l)))
             if idx >= len(l):
