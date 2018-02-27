@@ -2,17 +2,19 @@ from fault_injector.workload_generator.element_generator import ElementPicker
 from fault_injector.io.writer import CSVWriter
 from fault_injector.io.task import Task
 from scipy.stats import norm
-from random import uniform
+from numpy.random import choice
+from os.path import split
 
 
 class WorkloadGenerator:
 
-    def __init__(self, path, rr_benches=False, rr_faults=False, fault_overlap=False, bench_overlap=False):
-        self._rr_fault = rr_faults
-        self._rr_bench = rr_benches
+    def __init__(self, path, fault_overlap=False, bench_overlap=False, write_probe=True):
         self._fault_overlap = fault_overlap
         self._bench_overlap = bench_overlap
+        self._probe = write_probe
         self._path = path
+        path_split, fname = split(path)
+        self._probe_path = path_split + '/probe-' + fname
         self._rr_indexes = {}
         self._faultTimeGenerator = ElementPicker()
         self._faultDurGenerator = ElementPicker()
@@ -76,11 +78,15 @@ class WorkloadGenerator:
         self._faultDurGenerator.set_distribution(norm(fault_len, fault_len * var_factor))
         self._faultTimeGenerator.set_distribution(norm(inter_fault_time, inter_fault_time * var_factor))
 
-    def generate(self, faults, benchmarks, span_limit=36000, size_limit=None):
+    def generate(self, faults, benchmarks, fault_p=None, bench_p=None, span_limit=36000, size_limit=None):
         if span_limit is None:
             raise AttributeError('Span limit cannot be None!')
+        if fault_p is None or len(fault_p) != len(faults):
+            fault_p = [1 / len(faults)] * len(faults)
+        if bench_p is None or len(bench_p) != len(benchmarks):
+            bench_p = [1 / len(benchmarks)] * len(benchmarks)
 
-        bench_list = self._pregen_benchmarks(benchmarks, span_limit, size_limit)
+        bench_list = self._pregen_benchmarks(benchmarks, bench_p, span_limit, size_limit)
 
         writer = CSVWriter(self._path)
         cur_size = 0
@@ -100,14 +106,21 @@ class WorkloadGenerator:
             t.timestamp = int(cur_span)
             t.isFault = True
             t.seqNum = cur_size
-            t.args = self._pick_entry(faults, self._rr_fault).format(t.duration)
-
+            t.args = choice(faults, p=fault_p).format(t.duration)
             cur_size += 1
+
+            while(len(bench_list) > 0) and bench_list[0].timestamp < t.timestamp:
+                b = bench_list.pop(0)
+                writer.write_entry(b)
+
             writer.write_entry(t)
 
         writer.close()
 
-    def _pregen_benchmarks(self, benchmarks, span_limit, size_limit):
+        if self._probe:
+            self._write_probe(self._probe_path, faults, benchmarks)
+
+    def _pregen_benchmarks(self, benchmarks, bench_p, span_limit, size_limit):
         cur_size = 0
         cur_span = 0
         cur_dur = 0
@@ -126,22 +139,35 @@ class WorkloadGenerator:
             t.timestamp = int(cur_span)
             t.isFault = False
             t.seqNum = cur_size
-            t.args = self._pick_entry(benchmarks, self._rr_bench).format(t.duration)
+            t.args = choice(benchmarks, p=bench_p).format(t.duration)
 
             cur_size += 1
             bench_list.append(t)
 
         return bench_list
 
-    def _pick_entry(self, l, rr):
-        if rr:
-            if id(l) not in self._rr_indexes:
-                self._rr_indexes[id(l)] = 0
-            el = l[self._rr_indexes[id(l)]]
-            self._rr_indexes[id(l)] = (self._rr_indexes[id(l)] + 1) % len(l)
-        else:
-            idx = int(uniform(0, len(l)))
-            if idx >= len(l):
-                idx = len(l) - 1
-            el = l[idx]
-        return el
+    def _write_probe(self, path, faults, benchmarks):
+        writer = CSVWriter(path)
+
+        cur_span = 0
+        fix_dur = 5
+
+        for f in faults:
+            t = Task()
+            t.duration = fix_dur
+            t.timestamp = cur_span
+            t.args = f
+            t.isFault = True
+            writer.write_entry(t)
+            cur_span += fix_dur
+
+        for b in benchmarks:
+            t = Task()
+            t.duration = fix_dur
+            t.timestamp = cur_span
+            t.args = b
+            t.isFault = False
+            writer.write_entry(t)
+            cur_span += fix_dur
+
+        writer.close()

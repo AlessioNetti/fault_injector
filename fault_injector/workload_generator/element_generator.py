@@ -20,14 +20,16 @@ class ElementPicker:
         else:
             print(dist)
 
-    def fit_data(self, dist, data, loc=None):
+    def fit_data(self, dist, data, loc=None, scale=1):
         if dist is not None and isinstance(dist, rv_continuous) and isinstance(data, (list, tuple)):
             if loc is not None:
                 shift = np.mean(data) - loc
-                self._data = [d - shift for d in data]
-            else:
-                self._data = data
-            dist_params = dist.fit(data)
+                data = [d - shift for d in data]
+            if scale != 1 and scale > 0:
+                data_m = np.mean(data)
+                data = [data_m + (d - data_m) * scale for d in data]
+            self._data = data
+            dist_params = dist.fit(self._data)
             self._dist = dist(*dist_params)
 
     def show_fit(self, val_range=(1, 10)):
