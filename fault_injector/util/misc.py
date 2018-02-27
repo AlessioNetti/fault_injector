@@ -1,5 +1,6 @@
 import socket, threading
 from fault_injector.network.msg_builder import MessageBuilder
+from os.path import basename
 
 ADDR_SEPARATOR = ':'
 
@@ -8,6 +9,7 @@ OUT_PREFIX = '/output-'
 LIST_PREFIX = '/listening-'
 
 SUDO_ID = 'sudo'
+EXEC_ID = './'
 BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
 NUMA_SEP = ','
@@ -81,8 +83,8 @@ def format_task_filename(msg):
     :param msg: A message dictionary
     :return: A string representing the filename of the output log for the task
     """
-    task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace('./', '')
-    return task_name.strip().split(' ')[0] + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
+    task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace(EXEC_ID, '')
+    return basename(task_name.strip().split(' ')[0]) + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
 
 
 def getipport(sock):
