@@ -1,38 +1,71 @@
 from scipy.stats import rv_continuous
-# Hackish import because of Scipy's crap interface
-from scipy.stats._distn_infrastructure import rv_frozen
+from scipy.stats.distributions import rv_frozen
 import matplotlib.pyplot as plt
 import numpy as np
 
 
 class ElementPicker:
+    """
+    This class encapsulates SciPy distribution objects, and provides easy to use tools to perform fitting and extract
+    values from a statistical distribution.
+    """
 
     def __init__(self, trim_zeros=True):
+        """
+        Constructor for the class
+
+        :param trim_zeros: Boolean flag. If True, values less or equal than zero are never returned with pick()
+        """
         self._dist = None
         self._data = None
         self._trimZeros = trim_zeros
         self._maxTries = 10000
 
     def set_distribution(self, dist):
+        """
+        Sets a statistical distribution to be used.
+
+        :param dist: The distribution object. MUST be an rv_frozen SciPy object, which is a distribution with its
+            parameters fixed.
+        """
         if dist is not None and isinstance(dist, rv_frozen):
             self._dist = dist
             self._data = None
         else:
-            print(dist)
+            raise ValueError('Invalid input types detected')
 
-    def fit_data(self, dist, data, loc=None, scale=1):
+    def fit_data(self, dist, data, loc=None, scale=None):
+        """
+        Performs fitting over a given dataset by using the indicated distribution type.
+
+        The resulting distribution is stored within the object for future use.
+
+        :param dist: The distribution to be used for fitting. It MUST be an rv_continuous SciPy object
+            (i.e. norm, exponweib)
+        :param data: The data on which fitting must be performed. Must be a 1-dimensional Python list
+        :param loc: Optional "location" parameter. If supplied, the data's mean is shifted to loc
+        :param scale: Optional "scale" parameter. If supplied, the data's standard deviation is shifted to scale.
+        """
         if dist is not None and isinstance(dist, rv_continuous) and isinstance(data, (list, tuple)):
             if loc is not None:
                 shift = np.mean(data) - loc
                 data = [d - shift for d in data]
-            if scale != 1 and scale > 0:
+            if scale is not None and scale >= 0:
                 data_m = np.mean(data)
-                data = [data_m + (d - data_m) * scale for d in data]
+                data_std = np.std(data)
+                data = [data_m + (d - data_m) * scale / data_std for d in data]
             self._data = data
             dist_params = dist.fit(self._data)
             self._dist = dist(*dist_params)
+        else:
+            raise ValueError('Invalid input types detected')
 
     def show_fit(self, val_range=(1, 10)):
+        """
+        Displays a plot of the distribution's PDF, and an histogram of the data used for fitting (if any).
+
+        :param val_range: Range of the plot on the X axis
+        """
         num_points = 1000
         xpoints = np.linspace(val_range[0], val_range[1], num_points)
 
@@ -49,6 +82,11 @@ class ElementPicker:
         plt.show()
 
     def pick(self):
+        """
+        Draws one value according to the underlying distribution.
+
+        :return: One floating-point value drawn from a statistical distribution
+        """
         el = self._dist.rvs() if self._dist is not None else None
         if el is not None and self._trimZeros and el <= 0:
             tries = 1

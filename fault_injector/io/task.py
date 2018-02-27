@@ -9,12 +9,12 @@ class Task:
     # Hardcoded value to represent Tasks that have no bounded duration
     VALUE_DUR_NO_LIM = 0
 
-    def __init__(self):
-        self.args = ''
-        self.timestamp = 0
-        self.duration = 0
-        self.seqNum = 0
-        self.isFault = False
+    def __init__(self, args='', timestamp=0, duration=0, seqNum=0, isFault=False):
+        self.args = args
+        self.timestamp = timestamp
+        self.duration = duration
+        self.seqNum = seqNum
+        self.isFault = isFault
 
     @staticmethod
     def dict_to_task(entry):
