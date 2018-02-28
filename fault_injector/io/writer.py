@@ -80,8 +80,11 @@ class CSVWriter(Writer):
         :param entry: the Task object that is to be converted and written to CSV
         :return: True if successful, False otherwise
         """
-        if self._writer is None or not isinstance(entry, Task):
-            CSVWriter.logger.error('Input Task to write_entry is malformed, or path not valid')
+        if self._writer is None:
+            CSVWriter.logger.error('No open file stream to write to')
+            return False
+        if not isinstance(entry, Task):
+            CSVWriter.logger.error('Input Task to write_entry is malformed')
             return False
         try:
             d = Task.task_to_dict(entry)
@@ -141,7 +144,10 @@ class ExecutionLogWriter(Writer):
         :param entry: a MessageBuilder dictionary
         :return: True if successful, False otherwise 
         """
-        if self._writer is None or not isinstance(entry, dict):
+        if self._writer is None:
+            ExecutionLogWriter.logger.error('No open file stream to write to')
+            return False
+        if not isinstance(entry, dict):
             ExecutionLogWriter.logger.error('Input Dict to write_entry is malformed')
             return False
         try:
