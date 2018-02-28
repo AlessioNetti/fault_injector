@@ -1,5 +1,6 @@
 from scipy.stats import rv_continuous
 from scipy.stats.distributions import rv_frozen
+from math import sqrt
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -60,11 +61,12 @@ class ElementGenerator:
         else:
             raise ValueError('Invalid input types detected')
 
-    def show_fit(self, val_range=(1, 10)):
+    def show_fit(self, val_range=(1, 10), n_bins=None):
         """
         Displays a plot of the distribution's PDF, and an histogram of the data used for fitting (if any).
 
         :param val_range: Range of the plot on the X axis
+        :param n_bins: The number of bins for the histogram
         """
         num_points = 1000
         xpoints = np.linspace(val_range[0], val_range[1], num_points)
@@ -72,7 +74,10 @@ class ElementGenerator:
         fig, ax = plt.subplots(figsize=(7, 5))
 
         if self._data is not None:
-            ax.hist(self._data, normed=True)
+            data_to_show = [d for d  in self._data if val_range[0] <= d <= val_range[1]]
+            if n_bins is None or n_bins < 0:
+                n_bins = int(sqrt(abs(val_range[1] - val_range[0])))
+            ax.hist(data_to_show, normed=True, bins=n_bins)
         if self._dist is not None:
             plt.plot(xpoints, self._dist.pdf(xpoints))
             plt.title("Fit of the distribution")
