@@ -2,7 +2,6 @@ from fault_injector.workload_generator.workload_generator import WorkloadGenerat
 from scipy.stats import norm, exponweib
 import datetime, calendar
 
-
 # The list of fault commands to be injected.
 # It is suggested to always use FULL paths, to avoid relative path issues
 faults = ['faultlib/leak {0}',
@@ -42,7 +41,8 @@ def parse_data(path):
     # Calculating the difference between consecutive entries, i.e. fault inter-arrival times
     for i in range(1, len(data)):
         point = data[i] - data[i - 1]
-        if point > 60:
+        # This serves to remove cascading faults, which would skew the distribution too much
+        if point > 300:
             data_filtered.append(point)
     return data_filtered
 
@@ -55,8 +55,8 @@ if __name__ == '__main__':
     # used for the inter-fault times
     generator.faultDurGenerator.set_distribution(norm(loc=60, scale=6))
     # Fitting a distribution over the acquired data
-    generator.faultTimeGenerator.fit_data(exponweib, data)
-    generator.faultTimeGenerator.show_fit(val_range=(0, 1000), n_bins=20)
+    generator.faultTimeGenerator.fit_data(exponweib, data, loc=700, scale=650)
+    generator.faultTimeGenerator.show_fit(val_range=(200, 900), n_bins=20)
     # We let the workload generator set the benchmark generator automatically, by imposing that roughly 80%
     # of the workload time must be spent in "busy" operation
     generator.autoset_bench_generators(busy_time=0.8, num_tasks=20, span_limit=span)
