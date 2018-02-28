@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-class ElementPicker:
+class ElementGenerator:
     """
     This class encapsulates SciPy distribution objects, and provides easy to use tools to perform fitting and extract
     values from a statistical distribution.

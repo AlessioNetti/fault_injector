@@ -341,6 +341,8 @@ class InjectionThreadPool(ThreadPool):
                 self._threads[i] = None
             self._initialized = False
             self._threads.clear()
+            self._session_start = 0
+            self._session_start_abs = 0
             ThreadPool.logger.debug('Thread pool successfully stopped')
 
     def _execute_task(self, task):

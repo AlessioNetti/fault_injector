@@ -1,4 +1,4 @@
-from fault_injector.workload_generator.element_generator import ElementPicker
+from fault_injector.workload_generator.element_generator import ElementGenerator
 from fault_injector.io.writer import CSVWriter
 from fault_injector.io.task import Task
 from scipy.stats import norm
@@ -31,11 +31,10 @@ class WorkloadGenerator:
         self._path = path
         path_split, fname = split(path)
         self._probe_path = path_split + WorkloadGenerator.PROBE_PREFIX + fname
-        self._rr_indexes = {}
-        self._faultTimeGenerator = ElementPicker()
-        self._faultDurGenerator = ElementPicker()
-        self._benchDurGenerator = ElementPicker()
-        self._benchTimeGenerator = ElementPicker()
+        self._faultTimeGenerator = ElementGenerator()
+        self._faultDurGenerator = ElementGenerator()
+        self._benchDurGenerator = ElementGenerator()
+        self._benchTimeGenerator = ElementGenerator()
 
         # By default, the fault and benchmarks durations and arrival times are generated according to Normal
         # distributions with reasonable values.

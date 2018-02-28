@@ -141,14 +141,14 @@ class InjectorClient:
         self._endReached = False
         read_tasks = 0
 
-        # Timestamp of the last correction that was applied to the clock of remote hosts
-        last_clock_correction = time()
         # Start timestamp for the workload, computed from its first entry, minus the specified padding value
         self._start_timestamp = task.timestamp - self._workloadPadding
         # Synchronizes the time with all of the connected hosts
         self._client.broadcast_msg(MessageBuilder.command_set_time(self._start_timestamp))
         # Absolute timestamp associated to the workload's starting timestamp
         self._start_timestamp_abs = time()
+        # Timestamp of the last correction that was applied to the clock of remote hosts
+        last_clock_correction = self._start_timestamp_abs
 
         while not self._endReached or self._tasks_are_pending():
             # While some tasks are still running, and there are tasks from the workload that still need to be read, we
@@ -322,8 +322,8 @@ class InjectorClient:
                 self._writers[addr].write_entry(MessageBuilder.status_connection(time()))
         elif is_status and status == Client.CONNECTION_RESTORED_MSG:
             # If connection has been restored with an host, we send a new session start command
-            resume_msg = MessageBuilder.command_session(self._session_id)
-            self._client.send_msg(addr, resume_msg)
+            self._client.send_msg(addr, MessageBuilder.command_session(self._session_id))
+            self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(time())))
         elif is_status and status == Client.CONNECTION_FINALIZED_MSG:
             self._pendingTasks.pop(addr, None)
             # If all connections to servers were finalized we assume that the injection can be terminated
@@ -353,15 +353,13 @@ class InjectorClient:
                 # ACK messages after the initialization phase are received ONLY when a connection is restored,
                 # and the session must be resumed
                 InjectorClient.logger.warning("Session resumed with host %s" % formatipport(addr))
-                now_timestamp_abs = time()
-                self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(now_timestamp_abs)))
                 # If the ack msg contains an error, it means all previously running tasks have been lost
+                if not self._suppressOutput:
+                    self._writers[addr].write_entry(MessageBuilder.status_connection(time(), restored=True))
                 if MessageBuilder.FIELD_ERR in msg:
                     self._pendingTasks[addr] = set()
                     if not self._suppressOutput:
                         self._writers[addr].write_entry(MessageBuilder.status_reset(msg[MessageBuilder.FIELD_TIME]))
-                if not self._suppressOutput:
-                    self._writers[addr].write_entry(MessageBuilder.status_connection(now_timestamp_abs, restored=True))
             elif msg_type == MessageBuilder.ACK_NO:
                 InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
                 self._client.remove_host(addr)
