@@ -1,6 +1,7 @@
 from scipy.stats import rv_continuous
 from scipy.stats.distributions import rv_frozen
 from math import sqrt
+from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -61,14 +62,19 @@ class ElementGenerator:
         else:
             raise ValueError('Invalid input types detected')
 
-    def show_fit(self, val_range=(1, 10), n_bins=None):
+    def show_fit(self, val_range=(1, 10), n_bins=None, title='', xlabel='', ylabel='', out=None):
         """
         Displays a plot of the distribution's PDF, and an histogram of the data used for fitting (if any).
 
         :param val_range: Range of the plot on the X axis
-        :param n_bins: The number of bins for the histogram
+        :param n_bins: The number of bins for the histogram, optional
+        :param title: Title of the plot, optional
+        :param xlabel: Label for the X axis, optional
+        :param ylabel: Label for the Y axis, optional
+        :param out: Path for the output plot file, optional
         """
         num_points = 1000
+        fontsize = 12
         xpoints = np.linspace(val_range[0], val_range[1], num_points)
 
         fig, ax = plt.subplots(figsize=(7, 5))
@@ -80,11 +86,18 @@ class ElementGenerator:
             ax.hist(data_to_show, normed=True, bins=n_bins)
         if self._dist is not None:
             plt.plot(xpoints, self._dist.pdf(xpoints))
-            plt.title("Fit of the distribution")
+            plt.title(title, fontsize=fontsize)
         else:
-            plt.title("No distribution currently set")
+            plt.title("No distribution currently set", fontsize=fontsize)
         ax.set_xlim(left=val_range[0], right=val_range[1], emit=True, auto=False)
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        ax.set_ylabel(ylabel, fontsize=fontsize)
         plt.show()
+
+        if out is not None:
+            ff = PdfPages(out)
+            ff.savefig(fig)
+            ff.close()
 
     def pick(self):
         """
