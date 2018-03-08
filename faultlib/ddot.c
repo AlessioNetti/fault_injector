@@ -15,15 +15,47 @@ void signal_handler(int sig_number)
     }
 }
 
+double** get_mat(int rows, int columns, double val, int reuse)
+{
+    int i,j;
+    double **mainp = NULL, *p;
+    mainp = (double**)malloc(rows*sizeof(double));
+    if(mainp == NULL)
+        return NULL;
+    for(i=0; i<rows; i++)
+    {
+        if(i==0 || reuse==0)
+        {
+            mainp[i] = (double*)malloc(columns*sizeof(double));
+            for(j=0;j<columns;j++)
+                mainp[i][j] = val;
+        }
+        else
+            mainp[i] = mainp[0];
+    }
+    return mainp;
+}
+
+void free_mat(double** mat, int rows, int reuse)
+{
+    int i;
+    if(reuse==0)
+        for(i=0; i<rows; i++)
+            free(mat[i]);
+    else
+        free(mat[0]);
+    free(mat);
+}
+
 // This program generates interference on the ALU by performing floating-point operations
 int main (int argc, char *argv[])
  {
     char *end;
-    int cache_size = 0, num_sizes = 3, num_rows = 0;
+    int cache_size = 0, num_sizes = 3, num_rows = 0, reuse=1;
     int i, j, k, d1, d2;
     int cache_sizes_base[] = {16 * 1024, 128 * 1024, 10240 * 1024};
     float size_muls[] = {0.9f, 5.0f, 10.0f};
-    double my_number = 0.0f, edge = 1e12, *mat1, *mat2, *mat3;
+    double my_number = 0.0f, total=0.0f, edge = 1e12, **mat1, **mat2;
     int low_intensity = 1, high_intensity = 2, intensity = 0;
     int duration = 0;
 
@@ -57,28 +89,21 @@ int main (int argc, char *argv[])
                 my_number = -edge + 2.0*edge*((rand() + 1.0)/RAND_MAX);
                 cache_size = cache_sizes_base[d1] * size_muls[d2] * intensity;
                 num_rows = (int)floor(sqrt(cache_size / sizeof(double)));
-                mat1 = (double*)malloc(num_rows*num_rows*sizeof(double));
-                mat2 = (double*)malloc(num_rows*num_rows*sizeof(double));
-                mat3 = (double*)malloc(num_rows*num_rows*sizeof(double));
-                if(mat1==NULL || mat2==NULL || mat3==NULL)
+                mat1 = get_mat(num_rows, num_rows, my_number, reuse);
+                mat2 = get_mat(num_rows, num_rows, my_number * 2, reuse);
+                if(mat1==NULL || mat2==NULL)
                 {
                     //printf("Allocation failed, exiting\n");
                     return -1;
                 }
-                for(i=0;i<num_rows;i++)
-                    for(j=0;j<num_rows;j++)
-                        *(mat1 + i*num_rows + j) = my_number;
-                        *(mat2 + i*num_rows + j) = my_number;
-                for(i=0;i<num_rows;i++)
-                    for(j=0;j<num_rows;j++)
-                    {
-                        *(mat3 + i*num_rows + j) = 0;
-                        for(k=0;k<num_rows;k++)
-                            *(mat3 + i*num_rows + j) += *(mat1 + i*num_rows + k) * *(mat2 + k*num_rows + j);
-                    }
-                free(mat1);
-                free(mat2);
-                free(mat3);
+                total = 0.0f;
+                for(i=0; i<num_rows; i++)
+                    for(j=0; j<num_rows; j++)
+                        for(k=0; k<num_rows; k++)
+                            //We suppose mat2 is transposed
+                            total += mat1[i][k] * mat2[j][k];
+                free_mat(mat1, num_rows, reuse);
+                free_mat(mat2, num_rows, reuse);
             }
     }
     return 0;
