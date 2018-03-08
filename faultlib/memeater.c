@@ -26,11 +26,11 @@ int main (int argc, char *argv[])
  {
     char *end;
     int *my_array = NULL;
-    int sleep_period = 2, num_iter = 10, i, j;
+    int sleep_period = 2, num_iter = 10, i, j, k;
     int array_size_base = 1048576 * 18;
     int array_size = 0, array_size_old = 0;
     int low_intensity = 1, high_intensity = 2;
-    int duration = 0;
+    int r, tot=0, duration = 0;
 
     if (argc <= 1)
     {
@@ -49,6 +49,7 @@ int main (int argc, char *argv[])
     }
 
     parent_pid = getpid();
+    srand(time(NULL));
     signal(SIGALRM, signal_handler);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
@@ -69,7 +70,7 @@ int main (int argc, char *argv[])
                 array_size_old = array_size;
                 array_size += array_size_base;
                 my_array = (int*)realloc(my_array, array_size * sizeof(int));
-                if(my_array == NULL || getppid() == parent_pid)
+                if(my_array == NULL || getppid() != parent_pid)
                 {
                     //printf("Null array returned\n");
                     return -1;
@@ -77,6 +78,12 @@ int main (int argc, char *argv[])
                 else
                     for(i=0;i<array_size-array_size_old;i++)
                         my_array[array_size_old + i] = my_array[i];
+                        for (k = 0; k < 10; k++)
+                        {
+                            r = rand();
+                            if (r < array_size)
+                                tot += my_array[r];
+                        }
                 sleep(sleep_period);
             }
             return 0;

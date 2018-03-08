@@ -64,7 +64,7 @@ int main (int argc, char *argv[])
             while(1)
             {
                 my_array = (char*)malloc(array_size * sizeof(char));
-                if(my_array == NULL || getppid() == parent_pid)
+                if(my_array == NULL || getppid() != parent_pid)
                     return -1;
                 else
                     memcpy(my_array, reference_array, array_size);
