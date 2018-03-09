@@ -253,7 +253,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=()):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=([], [])):
         """
         Constructor for the class
         
@@ -266,10 +266,13 @@ class InjectionThreadPool(ThreadPool):
             all connected hosts upon termination
         :param root: if True, tasks requiring superuser rights (sudo) are allowed to run. Requires password-less root
             access to be set on the host OS
-        :param numa_cores: The list of core IDs to be used by the NUMA policy (if available)
+        :param numa_cores: A tuple containing two lists. The first is the list of core IDs to be used by the NUMA policy
+            for fault programs, and the second is for benchmark programs
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
+        if not isinstance(numa_cores, (tuple, list)) or len(numa_cores) != 2:
+            numa_cores = ([], [])
         self._numa_cores = numa_cores
         self._server = msg_server
         self._skip_expired = skip_expired
@@ -369,7 +372,7 @@ class InjectionThreadPool(ThreadPool):
         # We parse the arguments sequence for the command of the task, supplied as string in the message
         task_args = split(task.args, posix=self._posix_shell)
         # Formats the command so that it can be run with a specific NUMA policy (assigned cores)
-        task_args = format_numa_command(task_args, self._numa_cores)
+        task_args = format_numa_command(task_args, self._numa_cores[0 if task.isFault else 1])
         if task.duration == 0 and task.isFault:
             InjectionThreadPool.logger.warning('Task %s is a fault but has undefined duration.', task.args)
         # If the task has no expected duration, no timeout is set

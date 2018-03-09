@@ -31,8 +31,9 @@ class InjectorServer:
             port = cfg['SERVER_PORT']
 
         se = Server(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
-        inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'], retry_tasks=cfg['RETRY_TASKS'],
-                               kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'], numa_cores=cfg['NUMA_CORES'])
+        inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
+                               retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'],
+                               numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']))
         return inj_s
 
     def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True, root=False, numa_cores=()):
