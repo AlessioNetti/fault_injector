@@ -4,6 +4,7 @@ from time import time
 from threading import Thread, Lock, Semaphore, Condition, current_thread
 from subprocess import TimeoutExpired, PIPE
 from collections import deque
+from fault_injector.util.misc import VALUE_NO_CORES, VALUE_ALL_CORES
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
@@ -253,7 +254,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=([], [])):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=(VALUE_NO_CORES, VALUE_NO_CORES)):
         """
         Constructor for the class
         
@@ -266,13 +267,11 @@ class InjectionThreadPool(ThreadPool):
             all connected hosts upon termination
         :param root: if True, tasks requiring superuser rights (sudo) are allowed to run. Requires password-less root
             access to be set on the host OS
-        :param numa_cores: A tuple containing two lists. The first is the list of core IDs to be used by the NUMA policy
+        :param numa_cores: A tuple containing two strings. The first is the list of core IDs to be used by the NUMA policy
             for fault programs, and the second is for benchmark programs
         """
         super().__init__(max_requests)
         assert isinstance(msg_server, MessageEntity), 'Messaging object must be a MessageEntity instance!'
-        if not isinstance(numa_cores, (tuple, list)) or len(numa_cores) != 2:
-            numa_cores = ([], [])
         self._numa_cores = numa_cores
         self._server = msg_server
         self._skip_expired = skip_expired
@@ -369,10 +368,8 @@ class InjectionThreadPool(ThreadPool):
             InjectionThreadPool.logger.warning('Starting time of task %s expired. Skipping' % task.args)
             self._process_result(task, time(), -1)
             return
-        # We parse the arguments sequence for the command of the task, supplied as string in the message
-        task_args = split(task.args, posix=self._posix_shell)
-        # Formats the command so that it can be run with a specific NUMA policy (assigned cores)
-        task_args = format_numa_command(task_args, self._numa_cores[0 if task.isFault else 1])
+        # We format the arguments list for the task
+        task_args = self.format_task_args(task)
         if task.duration == 0 and task.isFault:
             InjectionThreadPool.logger.warning('Task %s is a fault but has undefined duration.', task.args)
         # If the task has no expected duration, no timeout is set
@@ -445,7 +442,8 @@ class InjectionThreadPool(ThreadPool):
         :param task: The msg related to the task that has been started
         :param timestamp: The timestamp related to the starting time
         """
-        msg = MessageBuilder.status_start(task.args, task.duration, task.seqNum, timestamp, task.isFault)
+        task.timestamp = timestamp
+        msg = MessageBuilder.status_start(task)
         if msg is not None:
             self._server.broadcast_msg(msg)
 
@@ -458,12 +456,34 @@ class InjectionThreadPool(ThreadPool):
         :param rcode: The return code of the task's execution
         :param outdata: the shell output of the task, if it is a benchmark
         """
+        task.timestamp = timestamp
         if rcode != 0:
-            msg = MessageBuilder.status_error(task.args, task.duration, task.seqNum, timestamp, task.isFault, rcode)
+            msg = MessageBuilder.status_error(task, rcode)
         else:
             # If output logging is not enabled, or the task is not a benchmark, the output data is discarded
             if not self._log_outputs or task.isFault or len(outdata) == 0:
                 outdata = None
-            msg = MessageBuilder.status_end(task.args, task.duration, task.seqNum, timestamp, task.isFault, outdata)
+            msg = MessageBuilder.status_end(task, outdata)
         if msg is not None and not current_thread().has_to_terminate():
             self._server.broadcast_msg(msg)
+
+    def format_task_args(self, task):
+        """
+        Formats the arguments of the task in list format, including a NUMA policy command.
+
+        :param task: The task object to be executed
+        :return: A list of arguments for the task
+        """
+        # We parse the arguments sequence for the command of the task, supplied as string in the message
+        task_args = split(task.args, posix=self._posix_shell)
+        default_cores = self._numa_cores[0 if task.isFault else 1]
+        # The default NUMA policy (as in the config file) has ALWAYS higher priority than the one specified for the
+        # task. The only exception lies when the config file entries for NUMA are set to 'all'.
+        user_cores = task.cores if task.cores != VALUE_NO_CORES and default_cores == VALUE_ALL_CORES else default_cores
+        if user_cores != task.cores and task.cores != VALUE_NO_CORES:
+            InjectionThreadPool.logger.warning('NUMA policy for task %s is overridden by default Injector policy' % task.args)
+        task.cores = user_cores
+        # Formats the command so that it can be run with a specific NUMA policy (assigned cores)
+        if default_cores != VALUE_NO_CORES:
+            task_args = format_numa_command(task_args, task.cores)
+        return task_args

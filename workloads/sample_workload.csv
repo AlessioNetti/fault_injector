@@ -1,9 +1,9 @@
-timestamp, duration, seqNum, isFault, 							args 
- 		0, 		  0, 	  1,    True,    						  ls 
-	   10, 		  0,	  2,   False, 	 			          ls -la
-	   25, 		  5, 	  3,   False, 	 			 ping google.com
-	   40, 		  0, 	  4,    True, 	 					   ss -l
- 	   50, 		  0, 	  5,    True,    						  ls 
-	   60, 		  0,	  6,    True, 	 					  ls -la
-	   80, 		  0, 	  7,  	True, 	 			 		   ls -l
-	   90, 		 10, 	  8,   False, 	 			 ping github.com
+timestamp; duration; seqNum; isFault; cores; 							args 
+ 		0; 		  0; 	  1;    True;;    						  		  ls 
+	   10; 		  0;	  2;   False;; 	 			          		  ls -la
+	   25; 		  5; 	  3;   False;; 	 			 		 ping google.com
+	   40; 		  0; 	  4;    True;; 	 					   		   ss -l
+ 	   50; 		  0; 	  5;    True;;    						  		  ls 
+	   60; 		  0;	  6;    True;; 	 					  		  ls -la
+	   80; 		  0; 	  7;  	True;; 	 			 		   		   ls -l
+	   90; 		 10; 	  8;   False;; 	 			 		 ping github.com

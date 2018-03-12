@@ -50,8 +50,6 @@ if __name__ == '__main__':
     exit(0)
 
 
-
-
 # BELOW IS THE VERSION FOR NON-INTEL CPUS
 
 #perf_gov = 'performance'

@@ -1,6 +1,7 @@
 from fault_injector.workload_generator.element_generator import ElementGenerator
 from fault_injector.io.writer import CSVWriter
 from fault_injector.io.task import Task
+from fault_injector.util.misc import VALUE_NO_CORES
 from scipy.stats import norm
 from numpy.random import choice
 from os.path import split
@@ -126,7 +127,7 @@ class WorkloadGenerator:
         self._faultDurGenerator.set_distribution(norm(fault_len, fault_len * var_factor))
         self._faultTimeGenerator.set_distribution(norm(inter_fault_time, inter_fault_time * var_factor))
 
-    def generate(self, faults, benchmarks, fault_p=None, bench_p=None, span_limit=36000, size_limit=None):
+    def generate(self, faults, benchmarks, fault_p=None, bench_p=None, fault_cores=None, bench_cores=None, span_limit=36000, size_limit=None):
         """
         Generates a full workload consisting of benchmark and fault program tasks, in CSV format.
 
@@ -139,6 +140,10 @@ class WorkloadGenerator:
             same length as faults.
         :param bench_p: Optional. It is a list containing a probability for each benchmark entry, and must thus be of
             the same length as benchmarks.
+        :param fault_cores: Optional. It is a list in which each element is a string of core IDs on which the fault program
+            is allowed to run. The formatting is that of NUMACTL.
+        :param bench_cores: Optional. It is a list in which each element is a string of core IDs on which the benchmark
+            program is allowed to run. The formatting is that of NUMACTL.
         :param span_limit: The time limit for the workload's duration, expressed in seconds
         :param size_limit: Optional. The size limit of the workload, in terms of tasks. When both span_limit and
             size_limit are active, the generation stops as soon as whichever limit is reached first.
@@ -150,9 +155,12 @@ class WorkloadGenerator:
             fault_p = [1 / len(faults)] * len(faults)
         if bench_p is None or len(bench_p) != len(benchmarks):
             bench_p = [1 / len(benchmarks)] * len(benchmarks)
-
+        if fault_cores is not None and (not isinstance(fault_cores, (list, tuple)) or len(fault_cores) != len(faults)):
+            fault_cores = None
+        if bench_cores is not None and (not isinstance(bench_cores, (list, tuple)) or len(bench_cores) != len(benchmarks)):
+            bench_cores = None
         # The list of benchmark tasks is generated and stored beforehand
-        bench_list = self._pregen_benchmarks(benchmarks, bench_p, span_limit, size_limit)
+        bench_list = self._pregen_benchmarks(benchmarks, bench_p, bench_cores, span_limit, size_limit)
 
         writer = CSVWriter(self._path)
         cur_size = 0
@@ -172,7 +180,10 @@ class WorkloadGenerator:
 
             # We build the corresponding Task object, and draw a random fault entry from the faults list
             t = Task(duration=int(cur_dur), timestamp=int(cur_span), isFault=True)
-            t.args = choice(faults, p=fault_p).format(t.duration)
+            t_idx = choice(len(faults), p=fault_p)
+            t.args = faults[t_idx].format(t.duration)
+            if fault_cores is not None:
+                t.cores = fault_cores[t_idx]
 
             # At each generated faults, we first pop and write all benchmarks that come earlier. This ensures that
             # the final workload is timestamp-ordered
@@ -190,14 +201,15 @@ class WorkloadGenerator:
         writer.close()
 
         if self._probe:
-            self._write_probe(self._probe_path, faults, benchmarks)
+            self._write_probe(self._probe_path, faults, benchmarks, fault_cores, bench_cores)
 
-    def _pregen_benchmarks(self, benchmarks, bench_p=None, span_limit=36000, size_limit=None):
+    def _pregen_benchmarks(self, benchmarks, bench_p=None, bench_cores=None, span_limit=36000, size_limit=None):
         """
         Generates and returns a list of benchmark tasks
 
         :param benchmarks: The list of benchmark commands/paths to be used
         :param bench_p: A list of probabilities for each benchmark command
+        :param bench_cores: List in which each element is a string of core IDs on which the benchmark is allowed to run
         :param span_limit: The time limit of the workload
         :param size_limit: The size limit of the workload
         :return: A list of benchmark-related Task objects
@@ -216,7 +228,10 @@ class WorkloadGenerator:
             cur_dur = self.benchDurGenerator.pick()
 
             t = Task(duration=int(cur_dur), timestamp=int(cur_span), isFault=False)
-            t.args = choice(benchmarks, p=bench_p).format(t.duration)
+            t_idx = choice(len(benchmarks), p=bench_p)
+            t.args = benchmarks[t_idx].format(t.duration)
+            if bench_cores is not None:
+                t.cores = bench_cores[t_idx]
 
             t.seqNum = cur_size
             bench_list.append(t)
@@ -224,13 +239,15 @@ class WorkloadGenerator:
 
         return bench_list
 
-    def _write_probe(self, path, faults, benchmarks):
+    def _write_probe(self, path, faults, benchmarks, fault_cores=None, bench_cores=None):
         """
         Writes the probe workload file, if the write_probe option is enabled.
 
         :param path: The path to the probe workload file
         :param faults: The list of fault program paths
         :param benchmarks: The list of benchmark commands/paths
+        :param fault_cores: The list of core IDs strings on which each fault is allowed to run
+        :param bench_cores: The list of core IDs strings on which each benchmark is allowed to run
         """
         writer = CSVWriter(path)
 
@@ -239,14 +256,16 @@ class WorkloadGenerator:
         fix_dur = 5
 
         # This method write one single entry for each command type, with a low fixed duration (by default, 5 secs)
-        for f in faults:
-            t = Task(args=f.format(fix_dur), duration=fix_dur, timestamp=cur_span, isFault=True, seqNum=cur_size)
+        for idx, f in enumerate(faults):
+            t = Task(args=f.format(fix_dur), duration=fix_dur, timestamp=cur_span, isFault=True, seqNum=cur_size,
+                     cores=fault_cores[idx] if fault_cores is not None else VALUE_NO_CORES)
             writer.write_entry(t)
             cur_span += fix_dur
             cur_size += 1
 
-        for b in benchmarks:
-            t = Task(args=b, duration=fix_dur, timestamp=cur_span, isFault=False, seqNum=cur_size)
+        for idx, b in enumerate(benchmarks):
+            t = Task(args=b, duration=fix_dur, timestamp=cur_span, isFault=False, seqNum=cur_size,
+                     cores=bench_cores[idx] if bench_cores is not None else VALUE_NO_CORES)
             writer.write_entry(t)
             cur_span += fix_dur
             cur_size += 1

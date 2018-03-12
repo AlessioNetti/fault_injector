@@ -21,8 +21,8 @@ class ConfigLoader:
         "RETRY_PERIOD": 30,
         "PRE_SEND_INTERVAL": 600,
         "WORKLOAD_PADDING": 20,
-        "NUMA_CORES_FAULTS": [],
-        "NUMA_CORES_BENCHMARKS": [],
+        "NUMA_CORES_FAULTS": '',
+        "NUMA_CORES_BENCHMARKS": '',
         "HOSTS": []
     }
 

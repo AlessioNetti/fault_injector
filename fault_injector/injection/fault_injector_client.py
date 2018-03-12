@@ -175,7 +175,7 @@ class InjectorClient:
                 # We read all entries from the workload that correspond to tasks scheduled to start in the next
                 # minutes (specified by presendinterval), and issue the related commands. This supposes that the
                 # workload entries are ordered by their timestamp
-                msg = MessageBuilder.command_start(task.args, task.duration, task.seqNum, task.timestamp, task.isFault)
+                msg = MessageBuilder.command_start(task)
                 self._client.broadcast_msg(msg)
                 for s in self._pendingTasks.values():
                     s.add(task.seqNum)

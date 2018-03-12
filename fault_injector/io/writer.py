@@ -50,7 +50,7 @@ class CSVWriter(Writer):
     # Logger for the class
     logger = logging.getLogger(__name__)
 
-    DELIMITER_CHAR = ','
+    DELIMITER_CHAR = ';'
     QUOTE_CHAR = '|'
 
     def __init__(self, path):
@@ -112,7 +112,7 @@ class ExecutionLogWriter(Writer):
     # Logger for the class
     logger = logging.getLogger(__name__)
 
-    DELIMITER_CHAR = ','
+    DELIMITER_CHAR = ';'
     QUOTE_CHAR = '|'
     NONE_VALUE = 'None'
 

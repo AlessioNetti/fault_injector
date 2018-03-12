@@ -35,96 +35,96 @@ class MessageBuilder:
     FIELD_ISF = 'isFault'
     FIELD_OUTPUT = 'output'
     FIELD_ERR = 'error'
+    FIELD_CORES = 'cores'
 
     # List of all available fields (except output, which is treated separately)
-    FIELDS = [FIELD_TIME, FIELD_TYPE, FIELD_DATA, FIELD_SEQNUM, FIELD_DUR, FIELD_ISF, FIELD_ERR]
+    FIELDS = [FIELD_TIME, FIELD_TYPE, FIELD_DATA, FIELD_SEQNUM, FIELD_DUR, FIELD_ISF, FIELD_CORES, FIELD_ERR]
 
     @staticmethod
     def ack(timestamp, positive=True, error=None):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.ACK_YES if positive else MessageBuilder.ACK_NO}
         if error is not None:
             msg[MessageBuilder.FIELD_ERR] = error
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def command_greet(timestamp):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_GREET}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def command_set_time(timestamp):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_SET_TIME}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def command_correct_time(timestamp):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_CORRECT_TIME}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def command_session(timestamp, end=False):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_START_SESSION if not end else MessageBuilder.COMMAND_END_SESSION}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def command_terminate():
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_TERMINATE}
-        msg = MessageBuilder._build_fields(msg, None, None, None, None)
-        return msg
-
-    @staticmethod
-    def command_start(args, duration, seqNum, timestamp, isFault):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_START}
-        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
-        return msg
-
-    @staticmethod
-    def status_greet(timestamp, num, active):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_GREET}
-        msg = MessageBuilder._build_fields(msg, num, None, None, timestamp, active)
-        return msg
-
-    @staticmethod
-    def status_start(args, duration, seqNum, timestamp, isFault):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_START}
-        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
-        return msg
-
-    @staticmethod
-    def status_end(args, duration, seqNum, timestamp, isFault, output=None):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_END}
-        if output is not None:
-            msg[MessageBuilder.FIELD_OUTPUT] = output
-        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
-        return msg
-
-    @staticmethod
-    def status_error(args, duration, seqNum, timestamp, isFault, error):
-        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_ERR}
-        if error is not None:
-            msg[MessageBuilder.FIELD_ERR] = error
-        msg = MessageBuilder._build_fields(msg, args, duration, seqNum, timestamp, isFault)
         return msg
 
     @staticmethod
     def status_connection(timestamp, restored=False):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESTORED if restored else MessageBuilder.STATUS_LOST}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
     def status_reset(timestamp):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESET}
-        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp)
+        msg = MessageBuilder._build_fields(msg, None, None, None, timestamp, None, None)
         return msg
 
     @staticmethod
-    def _build_fields(msg, args=None, duration=None, seqNum=None, timestamp=None, isFault=None):
+    def status_greet(timestamp, num, active):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_GREET}
+        msg = MessageBuilder._build_fields(msg, num, None, None, timestamp, active, None)
+        return msg
+
+    @staticmethod
+    def command_start(t):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.COMMAND_START}
+        msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
+        return msg
+
+    @staticmethod
+    def status_start(t):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_START}
+        msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
+        return msg
+
+    @staticmethod
+    def status_end(t, output=None):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_END}
+        if output is not None:
+            msg[MessageBuilder.FIELD_OUTPUT] = output
+        msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
+        return msg
+
+    @staticmethod
+    def status_error(t, error):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_ERR}
+        if error is not None:
+            msg[MessageBuilder.FIELD_ERR] = error
+        msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
+        return msg
+
+    @staticmethod
+    def _build_fields(msg, args=None, duration=None, seqNum=None, timestamp=None, isFault=None, cores=None):
         if args is not None:
             msg[MessageBuilder.FIELD_DATA] = args
         if duration is not None:
@@ -135,4 +135,6 @@ class MessageBuilder:
             msg[MessageBuilder.FIELD_TIME] = int(timestamp)
         if isFault is not None:
             msg[MessageBuilder.FIELD_ISF] = isFault
+        if cores is not None:
+            msg[MessageBuilder.FIELD_CORES] = cores
         return msg

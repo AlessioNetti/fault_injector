@@ -1,4 +1,5 @@
 from fault_injector.network.msg_builder import MessageBuilder
+from fault_injector.util.misc import VALUE_NO_CORES
 
 
 class Task:
@@ -9,12 +10,13 @@ class Task:
     # Hardcoded value to represent Tasks that have no bounded duration
     VALUE_DUR_NO_LIM = 0
 
-    def __init__(self, args='', timestamp=0, duration=0, seqNum=0, isFault=False):
+    def __init__(self, args='', timestamp=0, duration=0, seqNum=0, isFault=False, cores=VALUE_NO_CORES):
         self.args = args
         self.timestamp = timestamp
         self.duration = duration
         self.seqNum = seqNum
         self.isFault = isFault
+        self.cores = cores
 
     @staticmethod
     def dict_to_task(entry):
@@ -68,4 +70,5 @@ class Task:
         t.seqNum = msg[MessageBuilder.FIELD_SEQNUM]
         t.timestamp = msg[MessageBuilder.FIELD_TIME]
         t.duration = msg[MessageBuilder.FIELD_DUR]
+        t.cores = msg[MessageBuilder.FIELD_CORES]
         return t

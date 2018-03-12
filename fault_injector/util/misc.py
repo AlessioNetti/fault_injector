@@ -12,7 +12,8 @@ SUDO_ID = 'sudo'
 EXEC_ID = './'
 BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
-NUMA_SEP = ','
+VALUE_NO_CORES = ''
+VALUE_ALL_CORES = 'all'
 
 
 def format_numa_command(arglist, cores):
@@ -20,15 +21,11 @@ def format_numa_command(arglist, cores):
     Formats an ordinary command to be preceded by a NUMA policy command, specifying the cores on which to run.
     
     :param arglist: the list of arguments of the command
-    :param cores: the list of cores to be included in the NUMA policy
+    :param cores: the string of cores to be included in the NUMA policy
     :return: the formatted arguments list
     """
-    if len(cores) > 0:
-        corestring = NUMA_SEP.join(str(el) for el in cores)
-        numalist = [BASE_NUMA_COMMAND, OPT_NUMA_COMMAND+corestring]
-        return numalist + arglist
-    else:
-        return arglist
+    numalist = [BASE_NUMA_COMMAND, OPT_NUMA_COMMAND+cores]
+    return numalist + arglist
 
 
 def format_injection_filename(results_dir, addr, workload_name=None):
