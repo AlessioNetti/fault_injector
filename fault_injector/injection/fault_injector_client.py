@@ -2,7 +2,7 @@ import logging, signal
 from fault_injector.network.client import Client
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.config_tools import ConfigLoader
-from fault_injector.util.misc import formatipport, strtoaddr
+from fault_injector.util.misc import formatipport, strtoaddr, start_subprocesses
 from fault_injector.util.misc import format_injection_filename, format_output_directory, format_output_filename
 from fault_injector.io.writer import ExecutionLogWriter
 from fault_injector.io.reader import Reader
@@ -24,7 +24,7 @@ class InjectorClient:
     # Logger for the class
     logger = logging.getLogger(__name__)
 
-    def __init__(self, clientobj, workload_padding=20, pre_send_interval=600, session_wait=60, results_dir='results'):
+    def __init__(self, clientobj, workload_padding=20, pre_send_interval=600, session_wait=60, results_dir='results', aux_commands=None):
         """
         Constructor for the class
 
@@ -37,9 +37,12 @@ class InjectorClient:
         :param session_wait: Time in seconds defining the interval of time in which to wait for all connected hosts
             to reply during the initialization and finalization of the session
         :param results_dir: Path of the results' directory, where the execution logs will be saved
+        :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the injector
         """
         assert isinstance(clientobj, Client), 'InjectorClient needs a Client object in its constructor!'
         self._client = clientobj
+        self._auxCommands = aux_commands
+        self._auxProcesses = None
         self._suppressOutput = False
         self._workloadPadding = workload_padding
         self._preSendInterval = pre_send_interval
@@ -79,14 +82,12 @@ class InjectorClient:
         cfg = ConfigLoader.getConfig(config)
         cl = Client(retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_c = InjectorClient(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'], pre_send_interval=cfg['PRE_SEND_INTERVAL'],
-                               session_wait=cfg['SESSION_WAIT'], results_dir=cfg['RESULTS_DIR'])
-        if hosts is None and 'HOSTS' in cfg:
+                               session_wait=cfg['SESSION_WAIT'], results_dir=cfg['RESULTS_DIR'], aux_commands=cfg['AUX_COMMANDS'])
+        if hosts is None or len(hosts) == 0:
             hosts = cfg['HOSTS']
         # The hosts specified in the configuration file (or as input to the method) are added and connection is
         # established with them
-        if hosts is not None:
-            if not isinstance(hosts, (list, tuple)):
-                hosts = list(hosts)
+        if len(hosts) > 0:
             hosts = [strtoaddr(h) for h in hosts if strtoaddr(h) is not None]
             cl.add_servers(hosts)
         return inj_c
@@ -107,11 +108,18 @@ class InjectorClient:
         :param max_tasks: The maximum number of tasks to be processed before terminating. Useful for debugging
         :param suppress_output: If True, all output file writing is suppressed
         """
+        if self._auxCommands is not None and len(self._auxCommands) > 0:
+            self._auxProcesses = start_subprocesses(self._auxCommands)
         self._suppressOutput = suppress_output
         if reader is not None:
             self._inject(reader, max_tasks)
         else:
             self._pull()
+        # Terminating and waiting for all aux processes
+        if self._auxProcesses is not None:
+            for p in self._auxProcesses:
+                p.terminate()
+                p.wait()
 
     def _inject(self, reader, max_tasks=None):
         """
@@ -447,12 +455,17 @@ class InjectorClient:
         A signal handler to perform a graceful exit procedure on SIGINT 
         """
         if sig == signal.SIGINT or sig == signal.SIGTERM:
+            InjectorClient.logger.info('Exit requested by user. Cleaning up...')
             if self._writers is not None and not self._suppressOutput:
                 for w in self._writers.values():
                     w.close()
             if self._reader is not None:
                 self._reader.close()
-            InjectorClient.logger.info('Exit requested by user. Cleaning up...')
             self._client.stop()
+            # Terminating and waiting for all aux processes
+            if self._auxProcesses is not None:
+                for p in self._auxProcesses:
+                    p.terminate()
+                    p.wait()
             InjectorClient.logger.info('Injection client stopped by user!')
             exit()

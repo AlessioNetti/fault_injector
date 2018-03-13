@@ -3,9 +3,10 @@ from time import time
 from fault_injector.network.server import Server
 from fault_injector.injection.thread_pool import InjectionThreadPool
 from fault_injector.network.msg_builder import MessageBuilder
-from fault_injector.util.misc import formatipport
+from fault_injector.util.misc import formatipport, start_subprocesses
 from fault_injector.util.config_tools import ConfigLoader
 from fault_injector.io.task import Task
+from fault_injector.util.misc import VALUE_NO_CORES
 
 
 class InjectorServer:
@@ -33,10 +34,11 @@ class InjectorServer:
         se = Server(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
                                retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'],
-                               numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']))
+                               numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']), aux_commands=cfg['AUX_COMMANDS'])
         return inj_s
 
-    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True, log_outputs=True, root=False, numa_cores=()):
+    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True,
+                 log_outputs=True, root=False, numa_cores=(VALUE_NO_CORES, VALUE_NO_CORES), aux_commands=None):
         """
         Constructor for the class
         
@@ -48,10 +50,13 @@ class InjectorServer:
         :param log_outputs: Boolean flag. See InjectionThreadPool for details
         :param root: Boolean flag. See InjectionThreadPool for details
         :param numa_cores: See InjectionThreadPool for details
+        :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the server
         """
         assert isinstance(serverobj, Server), 'InjectorServer needs a Server object in its constructor!'
         self._server = serverobj
         self._master = None
+        self._auxCommands = aux_commands
+        self._auxProcesses = None
         self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
         self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
@@ -63,6 +68,8 @@ class InjectorServer:
         """
         signal.signal(signal.SIGINT, self._signalhandler)
         signal.signal(signal.SIGTERM, self._signalhandler)
+        if self._auxCommands is not None and len(self._auxCommands) > 0:
+            self._auxProcesses = start_subprocesses(self._auxCommands)
         self._server.start()
         self._pool.start()
         while True:
@@ -149,5 +156,9 @@ class InjectorServer:
             InjectorServer.logger.info('Exit requested by user. Cleaning up...')
             self._pool.stop(kill_abruptly=self._kill_abruptly)
             self._server.stop()
+            if self._auxProcesses is not None:
+                for p in self._auxProcesses:
+                    p.terminate()
+                    p.wait()
             InjectorServer.logger.info('Injection server stopped by user!')
             exit()

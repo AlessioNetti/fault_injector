@@ -7,8 +7,7 @@ class ConfigLoader:
     logger = logging.getLogger(__name__)
 
     _dfl_config = {
-        "RESULTS_DIR": "results",
-        "SUDO_PSW": None,
+        "RESULTS_DIR": 'results',
         "SKIP_EXPIRED": True,
         "RETRY_TASKS": True,
         "ABRUPT_TASK_KILL": True,
@@ -23,7 +22,8 @@ class ConfigLoader:
         "WORKLOAD_PADDING": 20,
         "NUMA_CORES_FAULTS": '',
         "NUMA_CORES_BENCHMARKS": '',
-        "HOSTS": []
+        "HOSTS": [],
+        "AUX_COMMANDS": []
     }
 
     @staticmethod
