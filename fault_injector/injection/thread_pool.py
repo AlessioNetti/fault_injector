@@ -111,7 +111,7 @@ class ThreadPool(ABC):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('ThreadPool')
 
     def __init__(self, max_requests=20):
         """
@@ -250,7 +250,7 @@ class InjectionThreadPool(ThreadPool):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('InjectionThreadPool')
 
     CORRECTION_THRESHOLD = 60
 

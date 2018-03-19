@@ -1,8 +1,9 @@
 import logging, signal
-from fault_injector.network.client import Client
+from fault_injector.network.msg_client import MessageClient
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.config_tools import ConfigLoader
-from fault_injector.util.misc import formatipport, strtoaddr, start_subprocesses
+from fault_injector.util.subprocess_manager import SubprocessManager
+from fault_injector.util.misc import formatipport, strtoaddr
 from fault_injector.util.misc import format_injection_filename, format_output_directory, format_output_filename
 from fault_injector.io.writer import ExecutionLogWriter
 from fault_injector.io.reader import Reader
@@ -22,7 +23,7 @@ class InjectorClient:
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('InjectorClient')
 
     def __init__(self, clientobj, workload_padding=20, pre_send_interval=600, session_wait=60, results_dir='results', aux_commands=None):
         """
@@ -39,10 +40,9 @@ class InjectorClient:
         :param results_dir: Path of the results' directory, where the execution logs will be saved
         :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the injector
         """
-        assert isinstance(clientobj, Client), 'InjectorClient needs a Client object in its constructor!'
+        assert isinstance(clientobj, MessageClient), 'InjectorClient needs a Client object in its constructor!'
         self._client = clientobj
-        self._auxCommands = aux_commands
-        self._auxProcesses = None
+        self._subman = SubprocessManager(commands=aux_commands)
         self._suppressOutput = False
         self._workloadPadding = workload_padding
         self._preSendInterval = pre_send_interval
@@ -80,7 +80,7 @@ class InjectorClient:
         :return: An InjectionClient object
         """
         cfg = ConfigLoader.getConfig(config)
-        cl = Client(retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
+        cl = MessageClient(retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
         inj_c = InjectorClient(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'], pre_send_interval=cfg['PRE_SEND_INTERVAL'],
                                session_wait=cfg['SESSION_WAIT'], results_dir=cfg['RESULTS_DIR'], aux_commands=cfg['AUX_COMMANDS'])
         if hosts is None or len(hosts) == 0:
@@ -108,18 +108,14 @@ class InjectorClient:
         :param max_tasks: The maximum number of tasks to be processed before terminating. Useful for debugging
         :param suppress_output: If True, all output file writing is suppressed
         """
-        if self._auxCommands is not None and len(self._auxCommands) > 0:
-            self._auxProcesses = start_subprocesses(self._auxCommands)
+        self._subman.start_subprocesses()
         self._suppressOutput = suppress_output
         if reader is not None:
             self._inject(reader, max_tasks)
         else:
             self._pull()
         # Terminating and waiting for all aux processes
-        if self._auxProcesses is not None:
-            for p in self._auxProcesses:
-                p.terminate()
-                p.wait()
+        self._subman.stop_subprocesses()
 
     def _inject(self, reader, max_tasks=None):
         """
@@ -323,16 +319,16 @@ class InjectorClient:
         :param msg: The message dictionary
         """
         # We process status messages for connections that are in the queue
-        is_status, status = Client.is_status_message(msg)
-        if is_status and status == Client.CONNECTION_LOST_MSG:
+        is_status, status = MessageClient.is_status_message(msg)
+        if is_status and status == MessageClient.CONNECTION_LOST_MSG:
             # If connection has been lost with an host, we remove its pendingTasks entry
             if not self._suppressOutput:
                 self._writers[addr].write_entry(MessageBuilder.status_connection(time()))
-        elif is_status and status == Client.CONNECTION_RESTORED_MSG:
+        elif is_status and status == MessageClient.CONNECTION_RESTORED_MSG:
             # If connection has been restored with an host, we send a new session start command
             self._client.send_msg(addr, MessageBuilder.command_session(self._session_id))
             self._client.send_msg(addr, MessageBuilder.command_set_time(self._get_timestamp(time())))
-        elif is_status and status == Client.CONNECTION_FINALIZED_MSG:
+        elif is_status and status == MessageClient.CONNECTION_FINALIZED_MSG:
             self._pendingTasks.pop(addr, None)
             # If all connections to servers were finalized we assume that the injection can be terminated
             if len(self._pendingTasks) == 0:
@@ -380,11 +376,11 @@ class InjectorClient:
         :param msg: The message dictionary
         """
         # We process status messages for connections that are in the queue
-        is_status, status = Client.is_status_message(msg)
-        if is_status and status == Client.CONNECTION_LOST_MSG:
+        is_status, status = MessageClient.is_status_message(msg)
+        if is_status and status == MessageClient.CONNECTION_LOST_MSG:
             if not self._suppressOutput:
                 self._writers[addr].write_entry(MessageBuilder.status_connection(time()))
-        elif is_status and status == Client.CONNECTION_RESTORED_MSG:
+        elif is_status and status == MessageClient.CONNECTION_RESTORED_MSG:
             if not self._suppressOutput:
                 self._writers[addr].write_entry(MessageBuilder.status_connection(time(), restored=True))
         else:
@@ -463,9 +459,6 @@ class InjectorClient:
                 self._reader.close()
             self._client.stop()
             # Terminating and waiting for all aux processes
-            if self._auxProcesses is not None:
-                for p in self._auxProcesses:
-                    p.terminate()
-                    p.wait()
+            self._subman.stop_subprocesses()
             InjectorClient.logger.info('Injection client stopped by user!')
             exit()

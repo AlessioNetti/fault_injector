@@ -4,7 +4,7 @@ from copy import copy
 
 class ConfigLoader:
 
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('ConfigLoader')
 
     _dfl_config = {
         "RESULTS_DIR": 'results',

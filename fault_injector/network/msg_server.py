@@ -3,13 +3,13 @@ from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.util.misc import getipport
 
 
-class Server(MessageEntity):
+class MessageServer(MessageEntity):
     """
     Class that implements a simple server enabled for communication with multiple clients.
     
     """
 
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('MessageServer')
 
     def __init__(self, port, socket_timeout=10, max_connections=100, re_send_msgs=False):
         """
@@ -40,7 +40,7 @@ class Server(MessageEntity):
         # Listen for incoming connections
         self._serverSock.bind(self._serverAddress)
         self._serverSock.listen(self.max_connections)
-        Server.logger.info('Server has been started')
+        MessageServer.logger.info('Server has been started')
         while not self._hasToFinish:
             try:
                 read, wr, err = select.select(self._readSet, [], self._readSet, self.sock_timeout)
@@ -52,7 +52,7 @@ class Server(MessageEntity):
                     if sock == self._serverSock:
                         connection, client_address = self._serverSock.accept()
                         self._register_host(connection)
-                        Server.logger.info('Client %s has subscribed' % getipport(connection))
+                        MessageServer.logger.info('Client %s has subscribed' % getipport(connection))
                     elif sock == self._dummy_sock_r:
                         self._flush_output_queue()
                     else:
@@ -75,7 +75,7 @@ class Server(MessageEntity):
         self._dummy_sock_w.close()
         for sock in self._registeredHosts.values():
             sock.close()
-        Server.logger.info('Server has been shut down')
+        MessageServer.logger.info('Server has been shut down')
 
     def _update_seq_num(self, addr, seq_num, received=True):
         """

@@ -18,7 +18,7 @@ class MessageEntity(ABC):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('MessageEntity')
 
     # ID used to identify outbound broadcast messages
     BROADCAST_ID = '*'

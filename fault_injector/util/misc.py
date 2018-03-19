@@ -1,8 +1,7 @@
 import socket, threading
-import subprocess, os
 from fault_injector.network.msg_builder import MessageBuilder
 from os.path import basename
-from shlex import split
+
 
 ADDR_SEPARATOR = ':'
 
@@ -16,24 +15,6 @@ BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
 VALUE_NO_CORES = ''
 VALUE_ALL_CORES = 'all'
-
-
-def start_subprocesses(commands):
-    """
-    Spawns one subprocess for each command specified as input
-
-    :param commands: A list of string containing shell commands
-    :return: A list of Popen objects
-    """
-    procs = []
-    for c in commands:
-        args = split(c, posix=os.name == 'posix')
-        try:
-            p = subprocess.Popen(args=args)
-            procs.append(p)
-        except(OSError, FileNotFoundError):
-            pass
-    return procs
 
 
 def format_numa_command(arglist, cores):

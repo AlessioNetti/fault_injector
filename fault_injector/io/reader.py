@@ -49,7 +49,7 @@ class CSVReader(Reader):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('CSVReader')
 
     def __init__(self, path):
         """
@@ -105,7 +105,7 @@ class ExecutionLogReader(Reader):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('ExecutionLogReader')
 
     def __init__(self, path):
         """

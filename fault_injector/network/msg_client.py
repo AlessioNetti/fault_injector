@@ -4,14 +4,14 @@ from fault_injector.util.misc import formatipport
 from time import time
 
 
-class Client(MessageEntity):
+class MessageClient(MessageEntity):
     """
     Class that implements a client which can communicate with multiple servers.
     
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('MessageClient')
 
     def __init__(self, socket_timeout=10, retry_interval=600, retry_period=30, re_send_msgs=False):
         """
@@ -39,7 +39,7 @@ class Client(MessageEntity):
         :param addrs: The addresses of servers to which to connect, in (ip, port) tuple format
         """
         if addrs is None:
-            Client.logger.error('You must specify one or more addresses to start the client')
+            MessageClient.logger.error('You must specify one or more addresses to start the client')
             return
         if not isinstance(addrs, (list, tuple)):
             addrs = [addrs]
@@ -48,9 +48,9 @@ class Client(MessageEntity):
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((socket.gethostbyname(addr[0]), addr[1]))
                 self._register_host(sock)
-                Client.logger.info('Successfully connected to server %s' % formatipport(addr))
+                MessageClient.logger.info('Successfully connected to server %s' % formatipport(addr))
             except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError, socket.gaierror):
-                Client.logger.warning('Could not connect to %s' % formatipport(addr))
+                MessageClient.logger.warning('Could not connect to %s' % formatipport(addr))
                 pass
 
     def _listen(self):
@@ -60,7 +60,7 @@ class Client(MessageEntity):
         No action is taken upon the reception of a message: it is up to the user to decide how to react by looking
         at the message queue and taking action
         """
-        Client.logger.info('Client has been started')
+        MessageClient.logger.info('Client has been started')
         while not self._hasToFinish:
             try:
                 read, wr, err = select.select(self._readSet, [], self._readSet, self.sock_timeout)
@@ -84,7 +84,7 @@ class Client(MessageEntity):
                 self._trim_dead_sockets()
         for sock in self._registeredHosts.values():
             sock.close()
-        Client.logger.info('Client has been shut down')
+        MessageClient.logger.info('Client has been shut down')
 
     def _update_seq_num(self, addr, seq_num, received=True):
         """
@@ -111,7 +111,7 @@ class Client(MessageEntity):
         :param address: The (ip, port) address corresponding to the host to remove
         :param now: If False, the client will attempt to re-establish a connection with the target host
         """
-        super(Client, self)._remove_host(address)
+        super(MessageClient, self)._remove_host(address)
         # When connection is lost, we inject a status message for that host in the input queue
         self._add_to_input_queue(address, MessageEntity.CONNECTION_LOST_MSG)
         if not now and address not in self._dangling:
@@ -148,7 +148,7 @@ class Client(MessageEntity):
                         to_pop.append(addr)
                         # When connection is re-established, we inject a status message for that host in the input queue
                         self._add_to_input_queue(addr, MessageEntity.CONNECTION_RESTORED_MSG)
-                        Client.logger.info('Connection to server %s was successfully restored' % formatipport(addr))
+                        MessageClient.logger.info('Connection to server %s was successfully restored' % formatipport(addr))
                     except (ConnectionError, ConnectionRefusedError, TimeoutError, ConnectionAbortedError):
                         pass
             # We remove all hosts for which connection was re-established from the dangling ones

@@ -1,3 +1,71 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <signal.h>
+
+char *pstate_path = "/sys/devices/system/cpu/intel_pstate/max_perf_pct";
+int perf_pstate=100, ps_pstate=50, ps_pstate_low=70;
+
+void set_pstate(int new_pstate)
+{
+    FILE *out=NULL;
+    char buf[256];
+    snprintf(buf, 256, "%d", new_pstate);
+    out = fopen(pstate_path, "w");
+    fwrite(buf, sizeof(char), strlen(buf) + 1, out);
+    fclose(out);
+}
+
+void signal_handler(int sig_number)
+{
+    if(sig_number == SIGINT || sig_number == SIGTERM)
+    {
+        set_pstate(perf_pstate);
+        //printf("Exiting\n");
+        exit(0);
+    }
+}
+
+// This program reduces the performance of the CPU by decreasing its clock frequency
+int main (int argc, char *argv[])
+ {
+    char *end;
+    int pstate_to_set=0, duration=0;
+
+    if(geteuid() != 0)
+    {
+        //printf("This program must be run as root, exiting\n");
+        return -1;
+    }
+    if (argc <= 1)
+    {
+        //printf("Not enough arguments, exiting\n");
+        return -1;
+    }
+    else
+    {
+        duration = (int)strtoll(argv[1], &end, 10);
+        //printf("Starting with %i dur\n", duration);
+        if(argc == 3 && strcmp(argv[2], "l") == 0)
+            pstate_to_set = ps_pstate_low;
+        else
+            pstate_to_set = ps_pstate;
+    }
+
+    signal(SIGINT, signal_handler);
+    signal(SIGTERM, signal_handler);
+
+    set_pstate(pstate_to_set);
+    sleep(duration);
+    set_pstate(perf_pstate);
+
+    return 0;
+ }
+
+
+// BELOW IS THE OLD PYTHON IMPLEMENTATION
+/*
 from os.path import isdir
 from os import geteuid
 from time import sleep
@@ -98,3 +166,4 @@ if __name__ == '__main__':
 #    set_governor(perf_gov, cpu_start, cpu_end)
 #
 #    exit(0)
+*/

@@ -21,7 +21,7 @@ void signal_handler(int sig_number)
     }
 }
 
-// This program generates interference on the ALU by performing floating-point operations
+// This program generates interference on the HDD by performing repeated read/write operations
 int main (int argc, char *argv[])
  {
     int file_size_base = 1048576, file_size = 0, num_done = 0, i;
@@ -32,7 +32,7 @@ int main (int argc, char *argv[])
     if (argc <= 1)
     {
         //printf("Not enough arguments, exiting\n");
-        return 0;
+        return -1;
     }
     else
     {

@@ -48,7 +48,7 @@ class CSVWriter(Writer):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('CSVWriter')
 
     DELIMITER_CHAR = ';'
     QUOTE_CHAR = '|'
@@ -110,7 +110,7 @@ class ExecutionLogWriter(Writer):
     """
 
     # Logger for the class
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('ExecutionLogWriter')
 
     DELIMITER_CHAR = ';'
     QUOTE_CHAR = '|'
