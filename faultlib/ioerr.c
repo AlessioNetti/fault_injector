@@ -4,7 +4,7 @@
 #include <string.h>
 #include <signal.h>
 
-char *dev_path = "/sys/block/sda/sda1/make-it-fail";
+char *dev_path = "/sys/block/sdb/sdb1/make-it-fail";
 char *prob_path = "/debug/fail_make_request/probability";
 char *int_path = "/debug/fail_make_request/interval";
 char *times_path = "/debug/fail_make_request/times";
