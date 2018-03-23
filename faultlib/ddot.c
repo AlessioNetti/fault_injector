@@ -66,7 +66,7 @@ int main (int argc, char *argv[])
     }
     else
     {
-        duration = (int)strtoll(argv[1], &end, 10);
+        duration = (int)strtoll(argv[1], &end, 10) + 300;
         //printf("Starting with %i dur\n", duration);
         if(argc == 3 && strcmp(argv[2], "l") == 0)
             intensity = low_intensity;

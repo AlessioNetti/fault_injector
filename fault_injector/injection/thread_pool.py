@@ -378,7 +378,7 @@ class InjectionThreadPool(ThreadPool):
         task_end_time = None
         task_start_time = time()
         # We spawn a subprocess running the task with its arguments
-        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE)
+        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT)
         if p is None and not current_thread().has_to_terminate():
             # If no subprocess was spawned even if the thread has not been flagged for termination, it means there
             # was an error
@@ -415,7 +415,7 @@ class InjectionThreadPool(ThreadPool):
                         outdata_part = p.communicate()[0]
                         if outdata_part is not None:
                             outdata += outdata_part.decode(stdout.encoding)
-                        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE)
+                        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT)
                     else:
                         break
         # If the task has not terminated by its timeout, we just kill the process and collect the result
