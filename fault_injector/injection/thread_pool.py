@@ -322,6 +322,7 @@ class InjectionThreadPool(ThreadPool):
             will be killed abruptly with process.terminate(), without waiting for their termination
         """
         if self._initialized:
+            retry_tasks_old = self._retry_tasks
             # First of all, we flag all threads for termination
             for i in range(len(self._threads)):
                 self._threads[i].terminate()
@@ -345,6 +346,7 @@ class InjectionThreadPool(ThreadPool):
             self._threads.clear()
             self._session_start = 0
             self._session_start_abs = 0
+            self._retry_tasks = retry_tasks_old
             ThreadPool.logger.debug('Thread pool successfully stopped')
 
     def _execute_task(self, task):
