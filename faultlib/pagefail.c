@@ -4,10 +4,9 @@
 #include <string.h>
 #include <signal.h>
 
-char *dev_path = "/sys/block/sdb/sdb1/make-it-fail";
-char *prob_path = "/debug/fail_make_request/probability";
-char *int_path = "/debug/fail_make_request/interval";
-char *times_path = "/debug/fail_make_request/times";
+char *prob_path = "/debug/fail_page_alloc/probability";
+char *int_path = "/debug/fail_page_alloc/interval";
+char *times_path = "/debug/fail_page_alloc/times";
 int interval = 5, low_prob = 25, hi_prob = 50;
 
 void echo_to_file(int val, char *path)
@@ -24,7 +23,6 @@ void signal_handler(int sig_number)
 {
     if(sig_number == SIGINT || sig_number == SIGTERM)
     {
-        echo_to_file(0, dev_path);
         echo_to_file(0, prob_path);
         echo_to_file(0, times_path);
         echo_to_file(0, int_path);
@@ -33,7 +31,7 @@ void signal_handler(int sig_number)
     }
 }
 
-// This program injects IO errors on block devices through the Linux Fault Injection framework
+// This program injects page allocation failures through the Linux Fault Injection framework
 int main (int argc, char *argv[])
  {
     char *end;
@@ -65,11 +63,9 @@ int main (int argc, char *argv[])
     echo_to_file(-1, times_path);
     echo_to_file(interval, int_path);
     echo_to_file(prob_to_set, prob_path);
-    echo_to_file(1, dev_path);
 
     sleep(duration);
 
-    echo_to_file(0, dev_path);
     echo_to_file(0, prob_path);
     echo_to_file(0, times_path);
     echo_to_file(0, int_path);
