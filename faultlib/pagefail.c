@@ -7,7 +7,8 @@
 char *prob_path = "/debug/fail_page_alloc/probability";
 char *int_path = "/debug/fail_page_alloc/interval";
 char *times_path = "/debug/fail_page_alloc/times";
-int interval = 5, low_prob = 25, hi_prob = 50;
+char *order_path = "/debug/fail_page_alloc/min-order";
+int interval = 5, low_prob = 25, hi_prob = 50, min_order = 0;
 
 void echo_to_file(int val, char *path)
 {
@@ -26,6 +27,7 @@ void signal_handler(int sig_number)
         echo_to_file(0, prob_path);
         echo_to_file(0, times_path);
         echo_to_file(0, int_path);
+        echo_to_file(0, order_path);
         //printf("Exiting\n");
         exit(0);
     }
@@ -63,12 +65,14 @@ int main (int argc, char *argv[])
     echo_to_file(-1, times_path);
     echo_to_file(interval, int_path);
     echo_to_file(prob_to_set, prob_path);
+    echo_to_file(min_order, order_path);
 
     sleep(duration);
 
     echo_to_file(0, prob_path);
     echo_to_file(0, times_path);
     echo_to_file(0, int_path);
+    echo_to_file(0, order_path);
 
     return 0;
  }
