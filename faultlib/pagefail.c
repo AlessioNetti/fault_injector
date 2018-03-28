@@ -4,11 +4,11 @@
 #include <string.h>
 #include <signal.h>
 
-char *prob_path = "/debug/fail_page_alloc/probability";
-char *int_path = "/debug/fail_page_alloc/interval";
-char *times_path = "/debug/fail_page_alloc/times";
-char *order_path = "/debug/fail_page_alloc/min-order";
-int interval = 5, low_prob = 25, hi_prob = 50, min_order = 0;
+char *prob_path = "/sys/kernel/debug/fail_page_alloc/probability";
+char *int_path = "/sys/kernel/debug/fail_page_alloc/interval";
+char *times_path = "/sys/kernel/debug/fail_page_alloc/times";
+char *order_path = "/sys/kernel/debug/fail_page_alloc/min-order";
+int interval = 2, low_prob = 25, hi_prob = 50, min_order = 0;
 
 void echo_to_file(int val, char *path)
 {
