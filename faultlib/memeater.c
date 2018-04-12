@@ -78,20 +78,22 @@ int main (int argc, char *argv[])
                 else
                     for(i=0;i<array_size-array_size_old;i++)
                         my_array[array_size_old + i] = my_array[i];
-                        for (k = 0; k < 10; k++)
-                        {
-                            r = rand();
-                            if (r < array_size)
-                                tot += my_array[r];
-                        }
+                for (k = 0; k < 10; k++)
+                {
+                    r = rand();
+                    if (r < array_size)
+                        tot += my_array[r];
+                }
                 sleep(sleep_period);
             }
             return 0;
         }
         else
+        {
             wait(&child_status);
             child_pid = 0;
             //printf("Restarting child\n");
+        }
     }
     return 0;
  }

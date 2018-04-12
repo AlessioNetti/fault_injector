@@ -73,9 +73,11 @@ int main (int argc, char *argv[])
             return 0;
         }
         else
+        {
             wait(&child_status);
             child_pid = 0;
             //printf("Restarting child\n");
+        }
     }
     return 0;
  }
