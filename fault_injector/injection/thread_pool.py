@@ -4,7 +4,7 @@ from time import time
 from threading import Thread, Lock, Semaphore, Condition, current_thread
 from subprocess import TimeoutExpired, PIPE
 from collections import deque
-from fault_injector.util.misc import VALUE_NO_CORES, VALUE_ALL_CORES
+from fault_injector.util.misc import VALUE_ALL_CORES
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
@@ -254,7 +254,7 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=(VALUE_NO_CORES, VALUE_NO_CORES)):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=(None, None)):
         """
         Constructor for the class
         
@@ -481,11 +481,11 @@ class InjectionThreadPool(ThreadPool):
         default_cores = self._numa_cores[0 if task.isFault else 1]
         # The default NUMA policy (as in the config file) has ALWAYS higher priority than the one specified for the
         # task. The only exception lies when the config file entries for NUMA are set to 'all'.
-        user_cores = task.cores if task.cores != VALUE_NO_CORES and default_cores == VALUE_ALL_CORES else default_cores
-        if user_cores != task.cores and task.cores != VALUE_NO_CORES:
+        user_cores = task.cores if task.cores is not None and default_cores == VALUE_ALL_CORES else default_cores
+        if user_cores != task.cores and task.cores is not None:
             InjectionThreadPool.logger.warning('NUMA policy for task %s is overridden by default Injector policy' % task.args)
         task.cores = user_cores
         # Formats the command so that it can be run with a specific NUMA policy (assigned cores)
-        if default_cores != VALUE_NO_CORES:
+        if default_cores is not None:
             task_args = format_numa_command(task_args, task.cores)
         return task_args

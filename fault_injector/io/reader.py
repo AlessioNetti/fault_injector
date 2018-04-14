@@ -1,6 +1,6 @@
 import csv, logging
 from abc import ABC, abstractmethod
-from fault_injector.io.writer import ExecutionLogWriter, CSVWriter
+from fault_injector.io.writer import CSVWriter
 from fault_injector.io.task import Task
 
 
@@ -41,6 +41,19 @@ class Reader(ABC):
         """
         raise (NotImplementedError, 'This method must be implemented!')
 
+    def _resolve_none_entries(self, entry):
+        """
+        Returns a dictionary starting from the input in which all entries matching the None keyword are converted to
+        the None Python primitive
+
+        :param entry: A dictionary to be filtered
+        :return: The input dictionary, with all None values correctly assigned
+        """
+        newEntry = {}
+        for k in entry.keys():
+            newEntry[k] = entry[k] if entry[k] is not None and entry[k] != CSVWriter.NONE_VALUE else None
+        return newEntry
+
 
 class CSVReader(Reader):
     """
@@ -60,7 +73,8 @@ class CSVReader(Reader):
         super().__init__(path)
         try:
             self._rfile = open(self._path, 'r')
-            self._reader = csv.DictReader(self._rfile, delimiter=CSVWriter.DELIMITER_CHAR, quotechar=CSVWriter.QUOTE_CHAR)
+            self._reader = csv.DictReader(self._rfile, delimiter=CSVWriter.DELIMITER_CHAR, quotechar=CSVWriter.QUOTE_CHAR,
+                                          restval=CSVWriter.NONE_VALUE)
         except (FileNotFoundError, IOError):
             CSVReader.logger.error("Cannot read workload from path %s" % self._path)
             self._reader = None
@@ -83,6 +97,7 @@ class CSVReader(Reader):
         filtered_line = {}
         for key, value in line.items():
             filtered_line[key.strip()] = value.strip()
+        filtered_line = self._resolve_none_entries(filtered_line)
         # We convert the dict read from the line to a Task object
         task = Task.dict_to_task(filtered_line)
         if task is None:
@@ -117,8 +132,8 @@ class ExecutionLogReader(Reader):
         self._rfile = None
         try:
             self._rfile = open(self._path, 'r')
-            self._reader = csv.DictReader(self._rfile, delimiter=ExecutionLogWriter.DELIMITER_CHAR,
-                                          quotechar=ExecutionLogWriter.QUOTE_CHAR, restval=ExecutionLogWriter.NONE_VALUE)
+            self._reader = csv.DictReader(self._rfile, delimiter=CSVWriter.DELIMITER_CHAR,
+                                          quotechar=CSVWriter.QUOTE_CHAR, restval=CSVWriter.NONE_VALUE)
         except (FileNotFoundError, IOError):
             ExecutionLogReader.logger.error('Cannot read execution log from path %s' % self._path)
             self._reader = None
@@ -136,7 +151,12 @@ class ExecutionLogReader(Reader):
         except (StopIteration, IOError):
             self._rfile.close()
             return None
-        return line
+        # After reading the line, we strip all eventually present spaces and tabs
+        filtered_line = {}
+        for key, value in line.items():
+            filtered_line[key.strip()] = value.strip()
+        filtered_line = self._resolve_none_entries(filtered_line)
+        return filtered_line
 
     def close(self):
         """

@@ -1,5 +1,4 @@
 from fault_injector.network.msg_builder import MessageBuilder
-from fault_injector.util.misc import VALUE_NO_CORES
 
 
 class Task:
@@ -10,7 +9,7 @@ class Task:
     # Hardcoded value to represent Tasks that have no bounded duration
     VALUE_DUR_NO_LIM = 0
 
-    def __init__(self, args='', timestamp=0, duration=0, seqNum=0, isFault=False, cores=VALUE_NO_CORES):
+    def __init__(self, args='', timestamp=0, duration=0, seqNum=0, isFault=False, cores='0'):
         self.args = args
         self.timestamp = timestamp
         self.duration = duration
@@ -33,7 +32,10 @@ class Task:
         try:
             for a in vars(t):
                 v_type = type(getattr(t, a))
-                v = v_type(entry[a]) if v_type != bool else entry[a] == 'True'
+                if entry[a] is not None:
+                    v = v_type(entry[a]) if v_type != bool else entry[a] == 'True'
+                else:
+                    v = None
                 setattr(t, a, v)
             return t
         except KeyError:
@@ -70,5 +72,5 @@ class Task:
         t.seqNum = msg[MessageBuilder.FIELD_SEQNUM]
         t.timestamp = msg[MessageBuilder.FIELD_TIME]
         t.duration = msg[MessageBuilder.FIELD_DUR]
-        t.cores = msg[MessageBuilder.FIELD_CORES]
+        t.cores = msg[MessageBuilder.FIELD_CORES] if MessageBuilder.FIELD_CORES in msg else None
         return t

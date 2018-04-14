@@ -7,7 +7,6 @@ from fault_injector.util.misc import formatipport
 from fault_injector.util.config_tools import ConfigLoader
 from fault_injector.io.task import Task
 from fault_injector.util.subprocess_manager import SubprocessManager
-from fault_injector.util.misc import VALUE_NO_CORES
 
 
 class InjectorServer:
@@ -39,7 +38,7 @@ class InjectorServer:
         return inj_s
 
     def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True,
-                 log_outputs=True, root=False, numa_cores=(VALUE_NO_CORES, VALUE_NO_CORES), aux_commands=None):
+                 log_outputs=True, root=False, numa_cores=(None, None), aux_commands=None):
         """
         Constructor for the class
         

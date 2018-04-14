@@ -13,7 +13,6 @@ SUDO_ID = 'sudo'
 EXEC_ID = './'
 BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
-VALUE_NO_CORES = ''
 VALUE_ALL_CORES = 'all'
 
 
@@ -83,6 +82,22 @@ def format_task_filename(msg):
     """
     task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace(EXEC_ID, '')
     return basename(task_name.strip().split(' ')[0]) + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
+
+
+def format_task_filename_cores(msg):
+    """
+    Given a task end message, this method returns the associated name for the command line output log file, with the
+    associated cores list (if present)
+
+    :param msg: A message dictionary
+    :return: A string representing the filename of the output log for the task
+    """
+    task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace(EXEC_ID, '')
+    cores = msg[MessageBuilder.FIELD_CORES]
+    if cores is not None:
+        return basename(task_name.strip().split(' ')[0]) + '_' + cores
+    else:
+        return basename(task_name.strip().split(' ')[0])
 
 
 def getipport(sock):

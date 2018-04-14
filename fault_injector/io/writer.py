@@ -41,6 +41,15 @@ class Writer(ABC):
         """
         raise (NotImplementedError, 'This method must be implemented!')
 
+    def _trim_none_values(self, entry):
+        """
+        Returns a cloned dictionary of the input, but without None values
+
+        :param entry: a dictionary
+        :return: input dictionary without None values
+        """
+        return {k: el for k, el in entry.items() if el is not None}
+
 
 class CSVWriter(Writer):
     """
@@ -52,6 +61,7 @@ class CSVWriter(Writer):
 
     DELIMITER_CHAR = ';'
     QUOTE_CHAR = '|'
+    NONE_VALUE = 'None'
 
     def __init__(self, path):
         """
@@ -67,7 +77,7 @@ class CSVWriter(Writer):
         try:
             self._wfile = open(self._path, 'w')
             self._writer = csv.DictWriter(self._wfile, fieldnames=self._fieldnames, delimiter=CSVWriter.DELIMITER_CHAR,
-                                          quotechar=CSVWriter.QUOTE_CHAR)
+                                          quotechar=CSVWriter.QUOTE_CHAR, restval=CSVWriter.NONE_VALUE)
             self._writer.writerow(fieldict)
         except (FileNotFoundError, IOError):
             CSVWriter.logger.error('Cannot write workload to path %s' % self._path)
@@ -87,7 +97,7 @@ class CSVWriter(Writer):
             CSVWriter.logger.error('Input Task to write_entry is malformed')
             return False
         try:
-            d = Task.task_to_dict(entry)
+            d = self._trim_none_values(Task.task_to_dict(entry))
             self._writer.writerow(d)
             self._wfile.flush()
             return True
@@ -112,10 +122,6 @@ class ExecutionLogWriter(Writer):
     # Logger for the class
     logger = logging.getLogger('ExecutionLogWriter')
 
-    DELIMITER_CHAR = ';'
-    QUOTE_CHAR = '|'
-    NONE_VALUE = 'None'
-
     def __init__(self, path):
         """
         Constructor for the class
@@ -130,7 +136,7 @@ class ExecutionLogWriter(Writer):
         try:
             self._wfile = open(self._path, 'w')
             self._writer = csv.DictWriter(self._wfile, fieldnames=self._fieldnames, delimiter=CSVWriter.DELIMITER_CHAR,
-                                          quotechar=CSVWriter.QUOTE_CHAR, restval=ExecutionLogWriter.NONE_VALUE,
+                                          quotechar=CSVWriter.QUOTE_CHAR, restval=CSVWriter.NONE_VALUE,
                                           extrasaction='ignore')
             self._writer.writerow(fieldict)
         except (FileNotFoundError, IOError):
@@ -151,6 +157,7 @@ class ExecutionLogWriter(Writer):
             ExecutionLogWriter.logger.error('Input Dict to write_entry is malformed')
             return False
         try:
+            entry = self._trim_none_values(entry)
             self._writer.writerow(entry)
             self._wfile.flush()
             return True

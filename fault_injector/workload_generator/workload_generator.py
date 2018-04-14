@@ -1,7 +1,6 @@
 from fault_injector.workload_generator.element_generator import ElementGenerator
 from fault_injector.io.writer import CSVWriter
 from fault_injector.io.task import Task
-from fault_injector.util.misc import VALUE_NO_CORES
 from scipy.stats import norm
 from numpy.random import choice
 from os.path import split
@@ -258,14 +257,14 @@ class WorkloadGenerator:
         # This method write one single entry for each command type, with a low fixed duration (by default, 5 secs)
         for idx, f in enumerate(faults):
             t = Task(args=f.format(fix_dur), duration=fix_dur, timestamp=cur_span, isFault=True, seqNum=cur_size,
-                     cores=fault_cores[idx] if fault_cores is not None else VALUE_NO_CORES)
+                     cores=fault_cores[idx] if fault_cores is not None else None)
             writer.write_entry(t)
             cur_span += fix_dur
             cur_size += 1
 
         for idx, b in enumerate(benchmarks):
             t = Task(args=b, duration=fix_dur, timestamp=cur_span, isFault=False, seqNum=cur_size,
-                     cores=bench_cores[idx] if bench_cores is not None else VALUE_NO_CORES)
+                     cores=bench_cores[idx] if bench_cores is not None else None)
             writer.write_entry(t)
             cur_span += fix_dur
             cur_size += 1
