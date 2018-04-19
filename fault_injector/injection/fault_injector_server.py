@@ -32,24 +32,19 @@ class InjectorServer:
             port = cfg['SERVER_PORT']
 
         se = MessageServer(port=port, re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
-        inj_s = InjectorServer(serverobj=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
-                               retry_tasks=cfg['RETRY_TASKS'], kill_abruptly=cfg['ABRUPT_TASK_KILL'], root=cfg['ENABLE_ROOT'],
-                               numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']), aux_commands=cfg['AUX_COMMANDS'])
+        pool = InjectionThreadPool(msg_server=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
+                                   retry_tasks=cfg['RETRY_TASKS'], retry_on_error=cfg['RETRY_TASKS_ON_ERROR'], log_outputs=cfg['LOG_OUTPUTS'],
+                                   root=cfg['ENABLE_ROOT'], numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']))
+        inj_s = InjectorServer(serverobj=se, poolobj=pool, kill_abruptly=cfg['ABRUPT_TASK_KILL'], aux_commands=cfg['AUX_COMMANDS'])
         return inj_s
 
-    def __init__(self, serverobj, max_requests=20, skip_expired=True, retry_tasks=True, kill_abruptly=True,
-                 log_outputs=True, root=False, numa_cores=(None, None), aux_commands=None):
+    def __init__(self, serverobj, poolobj, kill_abruptly=True, aux_commands=None):
         """
         Constructor for the class
         
         :param serverobj: Server object to be used for communication
-        :param max_requests: Number of maximum concurrent task requests. See InjectionThreadPool for details
-        :param skip_expired: Boolean flag. See InjectionThreadPool for details
-        :param retry_tasks: Boolean flag. See InjectionThreadPool for details
+        :param poolobj: InjectionThreadPool object to be used
         :param kill_abruptly: Boolean flag. See InjectionThreadPool for details
-        :param log_outputs: Boolean flag. See InjectionThreadPool for details
-        :param root: Boolean flag. See InjectionThreadPool for details
-        :param numa_cores: See InjectionThreadPool for details
         :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the server
         """
         assert isinstance(serverobj, MessageServer), 'InjectorServer needs a Server object in its constructor!'
@@ -58,8 +53,7 @@ class InjectorServer:
         self._subman = SubprocessManager(commands=aux_commands)
         self._session_timestamp = -1
         self._kill_abruptly = kill_abruptly
-        self._pool = InjectionThreadPool(msg_server=self._server, max_requests=max_requests, skip_expired=skip_expired,
-                                         retry_tasks=retry_tasks, log_outputs=log_outputs, root=root, numa_cores=numa_cores)
+        self._pool = poolobj
 
     def listen(self):
         """

@@ -10,6 +10,7 @@ class ConfigLoader:
         "RESULTS_DIR": 'results',
         "SKIP_EXPIRED": True,
         "RETRY_TASKS": True,
+        "RETRY_TASKS_ON_ERROR": False,
         "ABRUPT_TASK_KILL": True,
         "RECOVER_AFTER_DISCONNECT": False,
         "LOG_OUTPUTS": True,

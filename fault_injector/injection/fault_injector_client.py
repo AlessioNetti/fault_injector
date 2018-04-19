@@ -343,6 +343,8 @@ class InjectorClient:
             # We log on the terminal the content of the message in a pretty form
             if msg_type == MessageBuilder.STATUS_START:
                 InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+            elif msg_type == MessageBuilder.STATUS_RESTART:
+                InjectorClient.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_END:
                 InjectorClient.logger.info("Task %s terminated successfully on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
                 # If a task terminates, we remove its sequence number from the set of pending tasks for the host
@@ -389,8 +391,9 @@ class InjectorClient:
                 self._writers[addr].write_entry(msg)
             msg_type = msg[MessageBuilder.FIELD_TYPE]
             if msg_type == MessageBuilder.STATUS_START:
-                InjectorClient.logger.info(
-                    "Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+            elif msg_type == MessageBuilder.STATUS_RESTART:
+                InjectorClient.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_END:
                 InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], formatipport(addr)))

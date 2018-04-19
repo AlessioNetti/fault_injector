@@ -11,6 +11,7 @@ class MessageBuilder:
     ACK_NO = 'ack_no'
 
     STATUS_START = 'status_start'
+    STATUS_RESTART = 'status_restart'
     STATUS_END = 'status_end'
     STATUS_ERR = 'status_err'
     STATUS_GREET = 'status_greet'
@@ -104,6 +105,14 @@ class MessageBuilder:
     @staticmethod
     def status_start(t):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_START}
+        msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
+        return msg
+
+    @staticmethod
+    def status_restart(t, error=None):
+        msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_RESTART}
+        if error is not None:
+            msg[MessageBuilder.FIELD_ERR] = error
         msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
         return msg
 

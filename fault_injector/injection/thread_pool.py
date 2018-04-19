@@ -254,7 +254,8 @@ class InjectionThreadPool(ThreadPool):
 
     CORRECTION_THRESHOLD = 60
 
-    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, log_outputs=True, root=False, numa_cores=(None, None)):
+    def __init__(self, msg_server, max_requests=20, skip_expired=True, retry_tasks=True, retry_on_error=False,
+                 log_outputs=True, root=False, numa_cores=(None, None)):
         """
         Constructor for the class
         
@@ -263,6 +264,8 @@ class InjectionThreadPool(ThreadPool):
         :param skip_expired: Boolean flag. If True, tasks whose start timestamp has expired will not be executed
         :param retry_tasks: Boolean flag. If True, tasks terminating earlier than their expected duration will be
             re-executed
+        :param retry_on_error: Boolean flag. If True, and if retry_tasks is True as well, tasks that terminate before
+            their expected duration due to an error will NOT be restarted and will just be finalized
         :param log_outputs: Boolean flag. If True, the command line outputs of each task will be tracked and sent to
             all connected hosts upon termination
         :param root: if True, tasks requiring superuser rights (sudo) are allowed to run. Requires password-less root
@@ -276,6 +279,7 @@ class InjectionThreadPool(ThreadPool):
         self._server = msg_server
         self._skip_expired = skip_expired
         self._retry_tasks = retry_tasks
+        self._retry_on_error = retry_on_error
         self._log_outputs = log_outputs
         self._root = root
         # This flag determines whether we are running in a posix system or not. Used for shell argument parsing
@@ -311,7 +315,7 @@ class InjectionThreadPool(ThreadPool):
         my_timestamp = time() - self._session_start_abs + self._session_start
         diff = timestamp - my_timestamp - self._correction_factor
         if abs(diff) > InjectionThreadPool.CORRECTION_THRESHOLD and self._session_start_abs > 0:
-            InjectionThreadPool.logger.warning("Clock is drifting by %s secs against the injector's clock" % str(diff))
+            InjectionThreadPool.logger.warning("Clock is drifting by %s secs against the controller's clock" % str(diff))
             self._correction_factor += 0.1 * diff
 
     def stop(self, kill_abruptly=True):
@@ -367,7 +371,7 @@ class InjectionThreadPool(ThreadPool):
         # If the scheduled start time for the task has already passed (is expired) we can either skip it
         # (if skip_expired is True) or still start it immediately
         elif time_to_task < 0 and self._skip_expired:
-            InjectionThreadPool.logger.warning('Starting time of task %s expired. Skipping' % task.args)
+            InjectionThreadPool.logger.warning('Starting time of task %s expired. Skipping.' % task.args)
             self._process_result(task, time(), -1)
             return
         # We format the arguments list for the task
@@ -414,10 +418,15 @@ class InjectionThreadPool(ThreadPool):
                     if self._retry_tasks and task_timeout > 0:
                         if rcode != 0:
                             InjectionThreadPool.logger.warning('Sub-task %s terminated unexpectedly' % task.args)
+                            if not self._retry_on_error:
+                                break
                         outdata_part = p.communicate()[0]
                         if outdata_part is not None:
                             outdata += outdata_part.decode(stdout.encoding)
+                        task_restart_time = time()
                         p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT)
+                        InjectionThreadPool.logger.info('Restarting task %s' % task.args)
+                        self._inform_restart(task, task_restart_time, rcode)
                     else:
                         break
         # If the task has not terminated by its timeout, we just kill the process and collect the result
@@ -446,6 +455,20 @@ class InjectionThreadPool(ThreadPool):
         """
         task.timestamp = timestamp
         msg = MessageBuilder.status_start(task)
+        if msg is not None:
+            self._server.broadcast_msg(msg)
+
+    def _inform_restart(self, task, timestamp, rcode):
+        """
+        Method that sends a broadcast message to all connected hosts when a task is restarted
+
+        :param task: The msg related to the task that has terminated
+        :param timestamp: The timestamp related to the termination time
+        :param rcode: The return code of the task's execution
+        """
+        task.timestamp = timestamp
+        error = None if rcode == 0 else rcode
+        msg = MessageBuilder.status_restart(task, error)
         if msg is not None:
             self._server.broadcast_msg(msg)
 
