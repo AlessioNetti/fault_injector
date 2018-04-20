@@ -2,10 +2,9 @@ from csv import DictWriter, DictReader
 from os.path import split
 import argparse
 
-fieldBlacklist = ['#Time', 'Time_usec', 'ProducerName', 'component_id', 'job_id']
-
 
 def convertToDifferences(inpath, outpath):
+    fieldBlacklist = ['#Time', 'Time_usec', 'ProducerName', 'component_id', 'job_id']
     infile = open(inpath, 'r')
     reader = DictReader(infile)
 

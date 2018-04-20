@@ -1,7 +1,8 @@
+from fault_injector.post_processing.metrics_allowed import metricsWhitelist
 from csv import DictWriter, DictReader
 import argparse
 
-metricWhitelist = ['#Time', 'Active', 'cpu_freq.0']
+
 timeLabel = '#Time'
 
 
@@ -24,7 +25,7 @@ def mergeAndFilter(inpaths, out, times=None):
             time = int(entry[timeLabel].split('.')[0])
             if times is None or (times[0] <= time <= times[1]):
                 for k, v in entry.items():
-                    if not metricWhitelist or k in metricWhitelist:
+                    if not metricsWhitelist or k in metricsWhitelist:
                         if time not in entries:
                             entries[time] = {}
                         entries[time][k] = v
@@ -36,7 +37,7 @@ def mergeAndFilter(inpaths, out, times=None):
         f.close()
 
     outfile = open(out, 'w')
-    writer = DictWriter(outfile, fieldnames=metricWhitelist)
+    writer = DictWriter(outfile, fieldnames=metricsWhitelist)
     fieldict = {k: k for k in writer.fieldnames}
     writer.writerow(fieldict)
     for t in sorted(entries.keys()):

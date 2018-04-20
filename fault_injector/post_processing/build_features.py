@@ -1,14 +1,15 @@
 from fault_injector.io.writer import CSVWriter
+from fault_injector.post_processing.metrics_allowed import metricsBlacklist
 from csv import DictWriter, DictReader
 from scipy.stats import kurtosis, skew
 from collections import deque
-from copy import copy
+from copy import deepcopy
 from statistics import mode, StatisticsError
 import re
 import argparse
 import numpy as np
 
-fieldBlacklist = ['#Time', 'Time_usec', 'ProducerName', 'component_id', 'job_id']
+
 timeLabel = '#Time'
 taskLabel = '#Benchmark'
 faultLabel = '#Fault'
@@ -44,7 +45,7 @@ def getStatistics(myData, metricName):
 
 def isMetricAllowed(k, regexp):
     if k not in allowedMetricsLUT.keys():
-        allowedMetricsLUT[k] = k not in fieldBlacklist and (not any(l in k for l in perCoreLabels) or regexp.search(k) if regexp is not None else True)
+        allowedMetricsLUT[k] = k not in metricsBlacklist and (not any(l in k for l in perCoreLabels) or regexp.search(k) if regexp is not None else True)
     return allowedMetricsLUT[k]
 
 
@@ -87,7 +88,7 @@ def filterTaskLabels(label, core):
     return ','.join(finalLabelGroup) if len(finalLabelGroup) > 0 else CSVWriter.NONE_VALUE
 
 
-def buildFeatures(inpaths, labelfile, out, window=60, step=1, core=None):
+def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None):
     infiles = {}
     readers = {}
     regularexp = re.compile("[^0-9]" + core) if core is not None else None
@@ -137,7 +138,7 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=1, core=None):
             # filterTaskLabels(labelDict[currTimestamp][taskLabel], core)
         except KeyError:
             currBenchmark = 'None'
-        entriesQueue.appendleft((currTimestamp, copy(lastEntry), currDerivative, currFault, currBenchmark))
+        entriesQueue.appendleft((currTimestamp, deepcopy(lastEntry), currDerivative, currFault, currBenchmark))
         if len(entriesQueue) > window:
             entriesQueue.pop()
         currStep += 1
