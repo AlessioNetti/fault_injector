@@ -7,21 +7,21 @@ import argparse
 
 
 def fillTimestamps(writer, curr_bench, curr_fault, start, end, step):
-    label_separator = ','
+    label_separator = CSVWriter.L1_DELIMITER_CHAR
     curr_timestamp = start
     buffdict = {}
     while curr_timestamp < end:
-        buffdict['timestamp'] = curr_timestamp
+        buffdict['#Time'] = curr_timestamp
         if len(curr_fault) > 0:
-            buffdict['faults'] = label_separator.join(curr_fault)
+            buffdict['#Fault'] = label_separator.join(curr_fault)
         if len(curr_bench) > 0:
-            buffdict['benchmarks'] = label_separator.join(curr_bench)
+            buffdict['#Benchmark'] = label_separator.join(curr_bench)
         writer.writerow(buffdict)
         curr_timestamp += step
 
 
 def convertLogToLabelFile(inpath, outpath, step=1, showCores=False):
-    labelNames = ['timestamp', 'faults', 'benchmarks']
+    labelNames = ['#Time', '#Fault', '#Benchmark']
     reader = ExecutionLogReader(inpath)
     outfile = open(outpath, 'w')
     writer = DictWriter(outfile, fieldnames=labelNames, delimiter=CSVWriter.DELIMITER_CHAR, quotechar=CSVWriter.QUOTE_CHAR,

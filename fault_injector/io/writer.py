@@ -60,6 +60,7 @@ class CSVWriter(Writer):
     logger = logging.getLogger('CSVWriter')
 
     DELIMITER_CHAR = ';'
+    L1_DELIMITER_CHAR = '|'
     QUOTE_CHAR = '|'
     NONE_VALUE = 'None'
 
