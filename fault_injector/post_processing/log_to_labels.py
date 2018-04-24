@@ -1,27 +1,31 @@
 from fault_injector.io.reader import ExecutionLogReader
 from fault_injector.io.writer import CSVWriter
 from fault_injector.util.misc import format_task_filename, format_task_filename_cores
+from fault_injector.post_processing.constants import timeLabel, benchmarkLabel, faultLabel
 from csv import DictWriter
 from os.path import split
 import argparse
 
 
+# Given a benchmark and fault label, and a start/end timestamp couple, this function writes all timestamps with the
+# specified label from the start to the end of the interval
 def fillTimestamps(writer, curr_bench, curr_fault, start, end, step):
     label_separator = CSVWriter.L1_DELIMITER_CHAR
     curr_timestamp = start
     buffdict = {}
     while curr_timestamp < end:
-        buffdict['#Time'] = curr_timestamp
+        buffdict[timeLabel] = curr_timestamp
         if len(curr_fault) > 0:
-            buffdict['#Fault'] = label_separator.join(curr_fault)
+            buffdict[faultLabel] = label_separator.join(curr_fault)
         if len(curr_bench) > 0:
-            buffdict['#Benchmark'] = label_separator.join(curr_bench)
+            buffdict[benchmarkLabel] = label_separator.join(curr_bench)
         writer.writerow(buffdict)
         curr_timestamp += step
 
 
-def convertLogToLabelFile(inpath, outpath, step=1, showCores=False):
-    labelNames = ['#Time', '#Fault', '#Benchmark']
+# Reads a FINJ execution record, and outputs a file containing timestamps and task labels
+def convertLogToLabelFile(inpath, outpath, step=1, showNums=False):
+    labelNames = [timeLabel, faultLabel, benchmarkLabel]
     reader = ExecutionLogReader(inpath)
     outfile = open(outpath, 'w')
     writer = DictWriter(outfile, fieldnames=labelNames, delimiter=CSVWriter.DELIMITER_CHAR, quotechar=CSVWriter.QUOTE_CHAR,
@@ -29,23 +33,27 @@ def convertLogToLabelFile(inpath, outpath, step=1, showCores=False):
     fieldict = {k: k for k in labelNames}
     writer.writerow(fieldict)
     entry = reader.read_entry()
+    # Structures to keep track of currently running tasks
     curr_bench = []
     curr_fault = []
     curr_timestamp = 0
     while entry is not None:
+        # We process each entry in the execution record and keep track of which tasks are running at each timestamp
+        # Every time the system's status changes (tasks end or start) we write all timestamps with their labels in
+        # order up to the current time, starting from the previous state
         if entry['type'] == 'command_session_e':
             fillTimestamps(writer, curr_bench, curr_fault, curr_timestamp, int(entry['timestamp']), step)
             break
         elif entry['type'] == 'status_start':
             fillTimestamps(writer, curr_bench, curr_fault, curr_timestamp, int(entry['timestamp']), step)
-            taskname = format_task_filename(entry) if not showCores else format_task_filename_cores(entry)
+            taskname = format_task_filename(entry) if showNums else format_task_filename_cores(entry)
             if entry['isFault'] != 'True':
                 curr_bench.append(taskname)
             else:
                 curr_fault.append(taskname)
         elif entry['type'] == 'status_end' or entry['type'] == 'status_err':
             fillTimestamps(writer, curr_bench, curr_fault, curr_timestamp, int(entry['timestamp']), step)
-            taskname = format_task_filename(entry) if not showCores else format_task_filename_cores(entry)
+            taskname = format_task_filename(entry) if showNums else format_task_filename_cores(entry)
             if entry['isFault'] != 'True':
                 curr_bench.remove(taskname)
             else:
@@ -65,7 +73,7 @@ def convertLogToLabelFile(inpath, outpath, step=1, showCores=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fin-J Log to Label Converter Tool")
     parser.add_argument("-f", action="store", dest="source", type=str, default=None, help="Path to the CSV log file to be converted.")
-    parser.add_argument("-c", action="store_true", dest="showCores", help="Show assigned cores to tasks instead of sequence numbers.")
+    parser.add_argument("-n", action="store_true", dest="showNums", help="Show sequence numbers instead of assigned cores.")
     parser.add_argument("-s", action="store", dest="step", type=int, default=1, help="Step to increment the timestamps.")
     args = parser.parse_args()
     if args.source is None:
@@ -75,5 +83,5 @@ if __name__ == '__main__':
         args.step = 1
     in_path = args.source
     out_path = split(in_path)[0] + 'labels_' + split(in_path)[1]
-    convertLogToLabelFile(in_path, out_path, args.step, args.showCores)
+    convertLogToLabelFile(in_path, out_path, args.step, args.showNums)
     exit(0)

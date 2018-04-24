@@ -1,11 +1,10 @@
-from fault_injector.post_processing.metrics_allowed import metricsWhitelist
+from fault_injector.post_processing.constants import metricsWhitelist, timeLabel
 from csv import DictWriter, DictReader
 import argparse
 
 
-timeLabel = '#Time'
-
-
+# This function takes a list of CSV file paths as input. Optionally, it also takes a tuple of starting/end times
+# that must be used to perform filtering over the input files (for example, to extract data from a specific time frame)
 def mergeAndFilter(inpaths, out, times=None):
     infiles = {}
     readers = {}
@@ -22,6 +21,8 @@ def mergeAndFilter(inpaths, out, times=None):
             continue
 
         while entry is not None:
+            # For each entry read from each file, we verify that its timestamp falls within the admitted range, and
+            # that its metrics are allowed (the check is performed on the metricsWhitelist data structure)
             time = int(entry[timeLabel].split('.')[0])
             if times is None or (times[0] <= time <= times[1]):
                 for k, v in entry.items():

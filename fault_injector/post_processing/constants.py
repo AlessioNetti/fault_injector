@@ -1,7 +1,26 @@
+# Use this file to configure the post-processing subsystem for the fault and benchmark types that you employed in
+# your workload, together with the monitoring system that you used.
 
+# List of fault types that are meaningful only when the system is not idling
+busyFaults = ['cpufreq', 'pagefail']
+
+# List of fault types that only impact the core they are running on
+localFaults = ['dial', 'ddot']
+
+# Labels used in the post-processed CSV files
+timeLabel = '#Time'
+benchmarkLabel = '#Benchmark'
+faultLabel = '#Fault'
+mixedLabel = '#Mixed'
+busyLabel = 'busy'
+
+# Labels for metrics that are per-core and not aggregated, used in build_features
+perCoreLabels = ['per_core_', '#']
+
+# Whitelist of metrics to be considered in the filter_merge script
 metricsWhitelist = ['#Time', 'Active', 'cpu_freq.0']
 
-
+# Blacklist of metrics to be ignored in the build_features script
 metricsBlacklist = [  # CONSTANT METRICS FROM PROCSTAT
                     '#Time', 'Time_usec', 'ProducerName', 'component_id', 'job_id', 'cores_up', 'cpu_enabled', 'irq',
                     'steal', 'guest', 'guest_nice', 'per_core_cpu_enabled0', 'per_core_cpu_enabled1', 'per_core_cpu_enabled2',
