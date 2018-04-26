@@ -14,6 +14,7 @@ EXEC_ID = './'
 BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
 VALUE_ALL_CORES = 'all'
+TASKNAME_SEPARATOR = '_'
 
 
 def format_numa_command(arglist, cores):
@@ -81,7 +82,7 @@ def format_task_filename(msg):
     :return: A string representing the filename of the output log for the task
     """
     task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace(EXEC_ID, '')
-    return basename(task_name.strip().split(' ')[0]) + '_' + str(msg[MessageBuilder.FIELD_SEQNUM])
+    return basename(task_name.strip().split(' ')[0]) + TASKNAME_SEPARATOR + str(msg[MessageBuilder.FIELD_SEQNUM])
 
 
 def format_task_filename_cores(msg):
@@ -95,7 +96,7 @@ def format_task_filename_cores(msg):
     task_name = msg[MessageBuilder.FIELD_DATA].replace(SUDO_ID, '').replace(EXEC_ID, '')
     cores = msg[MessageBuilder.FIELD_CORES]
     if cores is not None:
-        return basename(task_name.strip().split(' ')[0]) + '_' + cores
+        return basename(task_name.strip().split(' ')[0]) + TASKNAME_SEPARATOR + cores
     else:
         return basename(task_name.strip().split(' ')[0])
 

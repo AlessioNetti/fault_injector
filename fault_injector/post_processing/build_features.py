@@ -1,6 +1,7 @@
 from fault_injector.io.writer import CSVWriter
 from fault_injector.post_processing.constants import metricsBlacklist, faultLabel, timeLabel, benchmarkLabel
 from fault_injector.post_processing.constants import perCoreLabels, localFaults, busyLabel, mixedLabel
+from fault_injector.util.misc import TASKNAME_SEPARATOR, VALUE_ALL_CORES
 from csv import DictWriter, DictReader
 from scipy.stats import kurtosis, skew
 from collections import deque
@@ -80,17 +81,20 @@ def readLabelsasDict(path, key):
 
 # Given a string containing a list of task/fault labels together with the cores they are running on, and a core ID,
 # this function returns the string containing the sublist of tasks that belong to the specific core
-# By default a task running on a different core than the input one is discarded: the only exceptions are with faults
-# that are considered "global", such as a memory leak, that affect the entire system regardless of the core they
-# are running on. This is regulated by the localFaults list in the constants file
+# By default a task running on a different core than the input one is discarded: the only exceptions are the following:
+# 1) No core was specified for analysis;
+# 2) The task was run on an undefined set of cores (NUMA policy disabled or set to all)
+# 3) The task is a "global" fault, which impacts the entire system regardless of the core it is run on
 def filterTaskLabels(label, core, isFault=False):
     if label == CSVWriter.NONE_VALUE:
         return label
     labelGroup = label.split(CSVWriter.L1_DELIMITER_CHAR)
     finalLabel = None
     for label in labelGroup:
-        taskname, labelCores = label.split('_')
-        if core is None or core in labelCores.split(',') or (isFault and taskname not in localFaults):
+        splitName = label.rsplit(TASKNAME_SEPARATOR, 1)
+        taskname = splitName[0]
+        labelCores = splitName[1] if len(splitName) == 2 else VALUE_ALL_CORES
+        if core is None or labelCores == VALUE_ALL_CORES or core in labelCores.split(',') or (isFault and taskname not in localFaults):
             if finalLabel is None:
                 finalLabel = taskname
             else:

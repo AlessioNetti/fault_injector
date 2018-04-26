@@ -4,6 +4,7 @@ from fault_injector.post_processing.constants import faultLabel, benchmarkLabel,
 from sklearn.model_selection import cross_validate
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import make_scorer, f1_score
+from fault_injector.util.misc import TASKNAME_SEPARATOR
 import numpy as np
 import argparse
 
@@ -34,7 +35,7 @@ def loadFeatures(inpath, maxFeatures=-1, noMix=False):
     while entry is not None and (maxFeatures == -1 or counter < maxFeatures):
         if sortedKeys is None:
             sortedKeys = sorted([k for k in entry.keys() if k not in fieldBlacklist])
-        featureLabel = entry[faultLabel].split('_')[0]
+        featureLabel = entry[faultLabel].rsplit(TASKNAME_SEPARATOR, 1)[0]
         if (featureLabel not in busyFaults or entry[benchmarkLabel] != CSVWriter.NONE_VALUE) and not (noMix and float(entry[mixedLabel]) > 0.5):
             featureMatrix.append([float(entry[k]) for k in sortedKeys])
             labelMatrix.append(featureLabel)
