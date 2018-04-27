@@ -1,6 +1,6 @@
 from fault_injector.io.writer import CSVWriter
 from fault_injector.post_processing.constants import metricsBlacklist, faultLabel, timeLabel, benchmarkLabel
-from fault_injector.post_processing.constants import perCoreLabels, localFaults, busyLabel, mixedLabel
+from fault_injector.post_processing.constants import perCoreLabels, localFaults, busyLabel, mixedLabel, derivLabel
 from fault_injector.util.misc import TASKNAME_SEPARATOR, VALUE_ALL_CORES
 from csv import DictWriter, DictReader
 from scipy.stats import kurtosis, skew
@@ -22,6 +22,7 @@ def computeDerivatives(oldEntry, newEntry):
     diff = {k: v - oldEntry[k] for k, v in newEntry.items()}
     return diff
 
+
 # Given a list of data, returns a dictionary of statistical features for such data, with each entry named according
 # to an input label
 def getStatistics(myData, metricName):
@@ -42,6 +43,7 @@ def getStatistics(myData, metricName):
             stats[metricName + percentileLabel + str(percentiles[ind])] = p
     return stats
 
+
 # Returns True if the given metric name is allowed for use in the feature, and False otherwise.
 # A metric is NOT allowed if it belongs to the metrics blacklist (defined in the constants file), or if it belongs
 # to a core that is not the one we are building metrics for
@@ -57,6 +59,7 @@ def updateAndFilter(dest, src, regexp=None):
     dest.update(goodVals)
     return dest
 
+
 # Reads a CSV file containing benchmark/fault labels for each timestamp (i.e. as produced by log_to_labels) and stores
 # it in a dictionary whose keys are the timestamps
 def readLabelsasDict(path, key):
@@ -69,15 +72,16 @@ def readLabelsasDict(path, key):
         infile.close()
         return None
     while entry is not None:
-        entryKey = entry[key]
+        entryKey = int(entry[key].split('.')[0])
         entry.pop(key)
-        myDict[int(entryKey)] = entry
+        myDict[entryKey] = entry
         try:
             entry = next(reader)
         except (StopIteration, IOError):
             entry = None
     infile.close()
     return myDict
+
 
 # Given a string containing a list of task/fault labels together with the cores they are running on, and a core ID,
 # this function returns the string containing the sublist of tasks that belong to the specific core
@@ -120,7 +124,7 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
     infiles = {}
     readers = {}
     # This regular expression identifies metrics that are related to the core we are analyzing
-    regularexp = re.compile("[^0-9]" + core) if core is not None else None
+    regularexp = re.compile("[^0-9]" + core + "$") if core is not None else None
     pilotReader = None
     for ind, p in enumerate(inpaths):
         if ind == 0:
@@ -165,6 +169,7 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
         try:
             currBenchmark = filterTaskLabels(labelDict[currTimestamp][benchmarkLabel], core, isFault=False)
         except KeyError:
+            print('- Timestamp %s not found' % currTimestamp)
             currBenchmark = CSVWriter.NONE_VALUE
         lastEntry[busyLabel] = 0.0 if currBenchmark == CSVWriter.NONE_VALUE else 1.0
 
@@ -193,7 +198,7 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
                 feature.update(getStatistics([en[1][k] for en in entriesQueue], k))
                 # Processing statistical features for first-order derivative entries in the queue
                 if useDerivatives:
-                    feature.update(getStatistics([en[2][k] for en in entriesQueue if en[2] is not None], k + '_der'))
+                    feature.update(getStatistics([en[2][k] for en in entriesQueue if en[2] is not None], k + derivLabel))
             feature[timeLabel] = int(np.asscalar(np.average([en[0] for en in entriesQueue])))
             # If the feature contains multiple states (i.e. tasks) we signal it in a field
             feature[mixedLabel] = 1.0 if isStateAmbiguous(entriesQueue) else 0.0

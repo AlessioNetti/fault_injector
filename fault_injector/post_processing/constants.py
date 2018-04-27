@@ -13,6 +13,7 @@ benchmarkLabel = '#Benchmark'
 faultLabel = '#Fault'
 mixedLabel = '#Mixed'
 busyLabel = 'busy'
+derivLabel = '_der'
 
 # Labels for metrics that are per-core and not aggregated, used in build_features
 perCoreLabels = ['per_core_', '#']
