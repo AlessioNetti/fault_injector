@@ -53,7 +53,7 @@ def loadFeatures(inpath, maxFeatures=-1, noMix=False, discardDerivs=False):
             entry = None
 
     infile.close()
-    return np.array(featureMatrix, dtype=np.float64), np.array(labelMatrix, dtype=str)
+    return np.array(featureMatrix, dtype=np.float64), np.array(labelMatrix, dtype=str), np.array(sortedKeys)
 
 
 # Creates a dictionary of SciKit scorer objects. Each object considers features from a specific class out of those
@@ -75,6 +75,8 @@ if __name__ == '__main__':
                         help="Path to the CSV features file to be used.")
     parser.add_argument("-m", action="store", dest="maxf", type=int, default=-1,
                         help="Maximum number of features to be processed")
+    parser.add_argument("-p", action="store", dest="impMetrics", type=int, default=0,
+                        help="Number of most important metrics to print when using a Random Forest Classifier.")
     parser.add_argument("-n", action="store_true", dest="noMix",
                         help="Use only features corresponding to non-ambiguous states.")
     parser.add_argument("-d", action="store_true", dest="discardDerivs",
@@ -83,7 +85,7 @@ if __name__ == '__main__':
     if args.source is None:
         print("You must supply the path to the features file that must be used!")
         exit(-1)
-    if args.maxf < -1:
+    if args.maxf < -1 or args.maxf == 0:
         args.maxf = -1
     print('---------- FINJ CROSS-VALIDATION TOOL ----------')
     print('- Input filename: %s' % args.source)
@@ -92,7 +94,7 @@ if __name__ == '__main__':
     if args.discardDerivs:
         print('- First-order derivatives are being discarded from features.')
     print('- Loading features...')
-    features, labels = loadFeatures(args.source, maxFeatures=args.maxf, noMix=args.noMix, discardDerivs=args.discardDerivs)
+    features, labels, metricKeys = loadFeatures(args.source, maxFeatures=args.maxf, noMix=args.noMix, discardDerivs=args.discardDerivs)
     print('- Feature length is %s...' % len(features[0, :]))
     print('- Number of features is %s...' % len(features[:, 0]))
     print('- Performing cross-validation...')
@@ -112,5 +114,15 @@ if __name__ == '__main__':
                 mean = scores[k].mean()
                 confidence = scores[k].std() * 1.96 / np.sqrt(len(scores[k]))
                 print('---- %s F-Score : %s (+/- %s)' % (k.split('_')[1], mean, confidence))
+        if clf.__class__.__name__ == 'RandomForestClassifier' and args.impMetrics > 0:
+            # We fit the random forest classifier just to extract the information regarding
+            # which are the most important metrics in the features
+            clf.fit(features, labels)
+            importances = clf.feature_importances_
+            indices = np.argsort(importances)[::-1]
+            print('- Most important features:')
+            for idx in range(args.impMetrics if args.impMetrics < len(indices) else len(indices)):
+                metric = indices[idx]
+                print('---- %s: %s' % (metricKeys[metric], importances[metric]))
         print('---------------')
     exit(0)
