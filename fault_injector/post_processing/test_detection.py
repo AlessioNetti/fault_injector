@@ -7,6 +7,7 @@ from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import make_scorer, f1_score
+from sklearn.exceptions import NotFittedError
 from fault_injector.util.misc import TASKNAME_SEPARATOR
 import numpy as np
 import argparse
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument("-m", action="store", dest="maxf", type=int, default=-1,
                         help="Maximum number of features to be processed")
     parser.add_argument("-p", action="store", dest="impMetrics", type=int, default=0,
-                        help="Number of most important metrics to print when using a Random Forest Classifier.")
+                        help="Number of most important metrics to print when using supported classifiers.")
     parser.add_argument("-n", action="store_true", dest="noMix",
                         help="Use only features corresponding to non-ambiguous states.")
     parser.add_argument("-d", action="store_true", dest="discardDerivs",
@@ -114,7 +115,15 @@ if __name__ == '__main__':
                 mean = scores[k].mean()
                 confidence = scores[k].std() * 1.96 / np.sqrt(len(scores[k]))
                 print('---- %s F-Score : %s (+/- %s)' % (k.split('_')[1], mean, confidence))
-        if clf.__class__.__name__ == 'RandomForestClassifier' and args.impMetrics > 0:
+        # Hackish way to detect if the current classifier supports feature importances
+        supportsImportances = False
+        try:
+            importances = clf.feature_importances_
+        except NotFittedError:
+            supportsImportances = True
+        except AttributeError:
+            supportsImportances = False
+        if supportsImportances and args.impMetrics > 0:
             # We fit the random forest classifier just to extract the information regarding
             # which are the most important metrics in the features
             clf.fit(features, labels)
