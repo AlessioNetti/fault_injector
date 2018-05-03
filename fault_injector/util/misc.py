@@ -10,11 +10,24 @@ OUT_PREFIX = '/output-'
 LIST_PREFIX = '/listening-'
 
 SUDO_ID = 'sudo'
+SHELL_SCRIPT_EXT = '.sh'
 EXEC_ID = './'
 BASE_NUMA_COMMAND = 'numactl'
 OPT_NUMA_COMMAND = '--physcpubind='
 VALUE_ALL_CORES = 'all'
 TASKNAME_SEPARATOR = '_'
+
+
+def is_shell_script(argstring):
+    """
+    Given a string for a shell command, determines if the command is a shell script or not.
+
+    :param argstring: A shell command
+    :return: True if the command is a shell script, False otherwise
+    """
+    task_name = argstring.replace(SUDO_ID, '').replace(EXEC_ID, '')
+    basename = task_name.strip().split(' ')[0]
+    return basename.endswith(SHELL_SCRIPT_EXT)
 
 
 def format_numa_command(arglist, cores):

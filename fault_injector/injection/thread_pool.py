@@ -4,11 +4,11 @@ from time import time
 from threading import Thread, Lock, Semaphore, Condition, current_thread
 from subprocess import TimeoutExpired, PIPE
 from collections import deque
-from fault_injector.util.misc import VALUE_ALL_CORES
+from fault_injector.util.misc import VALUE_ALL_CORES, SUDO_ID
 from fault_injector.network.msg_entity import MessageEntity
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.io.task import Task
-from fault_injector.util.misc import format_numa_command, SUDO_ID
+from fault_injector.util.misc import format_numa_command, is_shell_script
 from sys import stdout
 from shlex import split
 
@@ -374,6 +374,7 @@ class InjectionThreadPool(ThreadPool):
             InjectionThreadPool.logger.warning('Starting time of task %s expired. Skipping.' % task.args)
             self._process_result(task, time(), -1)
             return
+        is_script = is_shell_script(task.args)
         # We format the arguments list for the task
         task_args = self.format_task_args(task)
         if task.duration == 0 and task.isFault:
@@ -384,7 +385,7 @@ class InjectionThreadPool(ThreadPool):
         task_end_time = None
         task_start_time = time()
         # We spawn a subprocess running the task with its arguments
-        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT)
+        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT, shell=is_script)
         if p is None and not current_thread().has_to_terminate():
             # If no subprocess was spawned even if the thread has not been flagged for termination, it means there
             # was an error
@@ -424,7 +425,7 @@ class InjectionThreadPool(ThreadPool):
                         if outdata_part is not None:
                             outdata += outdata_part.decode(stdout.encoding)
                         task_restart_time = time()
-                        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT)
+                        p = current_thread().start_process(args=task_args, root=self._root, stdout=PIPE, stderr=subprocess.STDOUT, shell=is_script)
                         InjectionThreadPool.logger.info('Restarting task %s' % task.args)
                         self._inform_restart(task, task_restart_time, rcode)
                     else:
