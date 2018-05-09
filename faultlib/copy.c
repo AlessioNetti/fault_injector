@@ -5,7 +5,7 @@
 #include <signal.h>
 
 FILE *in=NULL, *out=NULL;
-char *file_name = "injection_temp_file";
+char *file_name = "/testdrive/injection_temp_file";
 
 void signal_handler(int sig_number)
 {

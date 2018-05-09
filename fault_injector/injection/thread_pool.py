@@ -376,7 +376,7 @@ class InjectionThreadPool(ThreadPool):
             return
         is_script = is_shell_script(task.args)
         # We format the arguments list for the task
-        task_args = self.format_task_args(task)
+        task_args = ' '.join(self.format_task_args(task)) if is_script else self.format_task_args(task)
         if task.duration == 0 and task.isFault:
             InjectionThreadPool.logger.warning('Task %s is a fault but has undefined duration.', task.args)
         # If the task has no expected duration, no timeout is set

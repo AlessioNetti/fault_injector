@@ -4,11 +4,11 @@
 #include <string.h>
 #include <signal.h>
 
-char *dev_path = "/sys/block/sdb/sdb1/make-it-fail";
+char *dev_path = "/sys/block/sdc/sdc1/make-it-fail";
 char *prob_path = "/sys/kernel/debug/fail_make_request/probability";
 char *int_path = "/sys/kernel/debug/fail_make_request/interval";
 char *times_path = "/sys/kernel/debug/fail_make_request/times";
-int interval = 5, low_prob = 25, hi_prob = 50;
+int interval = 10, low_prob = 25, hi_prob = 50;
 
 void echo_to_file(int val, char *path)
 {

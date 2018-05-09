@@ -3,12 +3,17 @@
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
+
+#define BUFLEN 20
 
 char *prob_path = "/sys/kernel/debug/fail_page_alloc/probability";
 char *int_path = "/sys/kernel/debug/fail_page_alloc/interval";
 char *times_path = "/sys/kernel/debug/fail_page_alloc/times";
 char *order_path = "/sys/kernel/debug/fail_page_alloc/min-order";
-int interval = 1, low_prob = 20, hi_prob = 40, min_order = 0;
+int interval = 1, low_prob = 25, hi_prob = 50, min_order = 0;
+int child_pid = 0, parent_pid = 0, child_status = 0;
+
 
 void echo_to_file(int val, char *path)
 {
@@ -22,12 +27,18 @@ void echo_to_file(int val, char *path)
 
 void signal_handler(int sig_number)
 {
-    if(sig_number == SIGINT || sig_number == SIGTERM)
+    if(sig_number == SIGINT || sig_number == SIGTERM || sig_number == SIGALRM)
     {
         echo_to_file(0, prob_path);
         echo_to_file(0, times_path);
         echo_to_file(0, int_path);
         echo_to_file(0, order_path);
+        if(child_pid != 0)
+        {
+            kill(child_pid, SIGKILL);
+            wait(&child_status);
+            //printf("Killing child\n");
+        }
         //printf("Exiting\n");
         exit(0);
     }
@@ -36,8 +47,9 @@ void signal_handler(int sig_number)
 // This program injects page allocation failures through the Linux Fault Injection framework
 int main (int argc, char *argv[])
  {
-    char *end;
-    int prob_to_set=0, duration=0;
+    char *end, buf[BUFLEN];
+    int prob_to_set=0, duration=0, i=0;
+    int r_wait = 0, base_wait = 45, span_wait = 16;
 
     if(geteuid() != 0)
     {
@@ -59,20 +71,45 @@ int main (int argc, char *argv[])
             prob_to_set = hi_prob;
     }
 
+    for(i=0;i<BUFLEN;i++)
+        buf[i] = 'b';
+    parent_pid = getpid();
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
+    signal(SIGALRM, signal_handler);
+    alarm(duration);
 
     echo_to_file(-1, times_path);
     echo_to_file(interval, int_path);
     echo_to_file(prob_to_set, prob_path);
     echo_to_file(min_order, order_path);
 
-    sleep(duration);
+    while(1)
+    {
+        // After enabling page failures, we spawn small processes from time to time to force their allocation
+        child_pid = fork();
+        if (child_pid == 0)
+        {
+            for(i=0;i<BUFLEN;i++)
+                buf[i] = 'a';
+            srand(time(NULL));
+            r_wait = base_wait + rand() % span_wait;
+            // printf("- Child process waiting %d seconds\n", r_wait);
+            sleep(r_wait);
+            return 0;
+        }
+        else
+        {
+            wait(&child_status);
+            child_pid = 0;
+        }
+    }
 
-    echo_to_file(0, prob_path);
-    echo_to_file(0, times_path);
-    echo_to_file(0, int_path);
-    echo_to_file(0, order_path);
+    //sleep(duration);
+    //echo_to_file(0, prob_path);
+    //echo_to_file(0, times_path);
+    //echo_to_file(0, int_path);
+    //echo_to_file(0, order_path);
 
     return 0;
  }

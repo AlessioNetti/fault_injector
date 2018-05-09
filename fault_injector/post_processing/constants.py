@@ -2,7 +2,7 @@
 # your workload, together with the monitoring system that you used.
 
 # List of fault types that are meaningful only when the system is not idling
-busyFaults = ['cpufreq', 'pagefail']
+busyFaults = ['cpufreq', 'pagefail', 'ioerr']
 
 # List of fault types that only impact the core they are running on
 localFaults = ['dial', 'ddot']
