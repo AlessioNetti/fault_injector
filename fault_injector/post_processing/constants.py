@@ -12,7 +12,7 @@ timeLabel = '#Time'
 benchmarkLabel = '#Benchmark'
 faultLabel = '#Fault'
 mixedLabel = '#Mixed'
-busyLabel = 'busy'
+busyLabel = 'allocated'
 derivLabel = '_der'
 
 # Labels for metrics that are per-core and not aggregated, used in build_features

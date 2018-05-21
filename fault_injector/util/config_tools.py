@@ -3,6 +3,9 @@ from copy import copy
 
 
 class ConfigLoader:
+    """
+    Class that provides static methods to load configuration descriptions (in form of dictionaries) from JSON files
+    """
 
     logger = logging.getLogger('ConfigLoader')
 
@@ -29,6 +32,13 @@ class ConfigLoader:
 
     @staticmethod
     def getConfig(file=None):
+        """
+        Loads a configuration dictionary from an input file, or return the default configuration
+
+        :param file: Path to a JSON file containing configuration entries for FINJ. If None is supplied, the default
+            configuration is used
+        :return: A configuration dictionary for FINJ
+        """
         if file is None:
             return copy(ConfigLoader._dfl_config)
         else:

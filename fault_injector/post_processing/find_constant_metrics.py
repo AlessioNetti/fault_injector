@@ -2,9 +2,14 @@ from csv import DictReader
 import argparse
 
 
-# Simple function that checks which metrics in a dictionary (read from a CSV) are constant and which change over time.
-# As a reference, the first record read from the file is used
 def findConstantMetrics(inpath):
+    """
+    Simple function that checks which metrics in a dictionary (read from a CSV) are constant and which change over time.
+    As a reference, the first record read from the file is used
+
+    :param inpath: The path to the CSV file that must be analyzed
+    :return: The list of metrics (keys) that are constant in the file
+    """
     infile = open(inpath, 'r')
     reader = DictReader(infile)
     try:

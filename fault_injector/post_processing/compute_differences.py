@@ -4,6 +4,13 @@ import argparse
 
 
 def convertToDifferences(inpath, outpath):
+    """
+    This function considers a CSV input file, and writes an output file containing the first-order derivatives for each
+    metric
+
+    :param inpath: The path to the input CSV file to be converted
+    :param outpath: The path to the output file that will contain first-order derivatives
+    """
     fieldBlacklist = ['#Time', 'Time_usec', 'ProducerName', 'component_id', 'job_id']
     infile = open(inpath, 'r')
     reader = DictReader(infile)
@@ -45,7 +52,7 @@ def convertToDifferences(inpath, outpath):
 
 
 # This script takes as input a CSV system performance metrics file, and computes its first-order derivatives equivalent
-# by performing differences between consecutive entries
+# by performing subtractions between consecutive entries
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fin-J First-Order Derivatives Converter Tool")
     parser.add_argument("-f", action="store", dest="source", type=str, default=None, help="Path to the CSV log file to be converted.")

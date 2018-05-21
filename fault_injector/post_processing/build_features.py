@@ -17,15 +17,58 @@ percentiles = [0, 5, 25, 50, 75, 95, 100]
 allowedMetricsLUT = {}
 
 
-# Computes first-order derivatives between two corresponding sets of metrics
+def findMaxima(inpaths, regexp):
+    """
+    Given a list of paths to CSV metric files, returns a dictionary containing the global maximum for each metric key
+
+    :param inpaths: A list of CSV file paths containing system performance metrics
+    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :return: A dictionary of maximal values for each metric key
+    """
+    maxima = {}
+    readers = {}
+    infiles = {}
+    for ind, p in enumerate(inpaths):
+            infile = open(p, 'r')
+            infiles[p] = infile
+            readers[p] = DictReader(infile)
+
+    for p, reader in readers.items():
+        while True:
+            try:
+                entry = next(reader)
+            except (StopIteration, IOError):
+                infiles[p].close()
+                infiles.pop(p)
+                break
+            for k, v in entry.items():
+                value = float(v)
+                if isMetricAllowed(k, regexp) and (k not in maxima or value > maxima[k]):
+                    maxima[k] = value
+    return maxima
+
+
 def computeDerivatives(oldEntry, newEntry):
+    """
+    Computes first-order derivatives between two corresponding sets of metrics
+
+    :param oldEntry: Dictionary of metrics at time t - 1
+    :param newEntry: Dictionary of metrics at time t
+    :return: Dictionary of first-order derivatives
+    """
     diff = {k: v - oldEntry[k] for k, v in newEntry.items()}
     return diff
 
 
-# Given a list of data, returns a dictionary of statistical features for such data, with each entry named according
-# to an input label
 def getStatistics(myData, metricName):
+    """
+    Given a list of data, returns a dictionary of statistical features for such data, with each entry named according
+    to an input label. Considered features are: avg, std, min, max, skewness, kurtosis, (5, 25, 50, 75, 95)th percentiles
+
+    :param myData: A list containing numerical data
+    :param metricName: String, containing the name of the metric being analysed
+    :return: A dictionary of statistical features for the input data
+    """
     percentileLabel = '_perc'
     stats = {}
     stats[metricName + '_avg'] = np.asscalar(np.average(myData))
@@ -44,25 +87,48 @@ def getStatistics(myData, metricName):
     return stats
 
 
-# Returns True if the given metric name is allowed for use in the feature, and False otherwise.
-# A metric is NOT allowed if it belongs to the metrics blacklist (defined in the constants file), or if it belongs
-# to a core that is not the one we are building metrics for
 def isMetricAllowed(k, regexp):
+    """
+    Returns True if the given metric name is allowed for use in the feature, and False otherwise.
+    A metric is NOT allowed if it belongs to the metrics blacklist (defined in the constants file), or if it belongs
+    to a core that is not the one we are building metrics for
+
+    :param k: key of a given metric
+    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :return: True if metric k is allowed, False otherwise
+    """
     if k not in allowedMetricsLUT.keys():
         allowedMetricsLUT[k] = k not in metricsBlacklist and (not any(l in k for l in perCoreLabels) or regexp.search(k) if regexp is not None else True)
     return allowedMetricsLUT[k]
 
 
-# Updates a features dictionary with entries from a second, new dictionary, by filtering out those that are not allowed
-def updateAndFilter(dest, src, regexp=None):
-    goodVals = {k: float(v) for k, v in src.items() if isMetricAllowed(k, regexp)}
+def updateAndFilter(dest, src, regexp=None, maxima=None):
+    """
+    Updates a features dictionary with entries from a second, new dictionary, by filtering out those that are not allowed
+
+    :param dest: Dictionary that must be updated with new values
+    :param src: Dictionary containing new values that must be integrated in the old dictionary
+    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :param maxima: If not None, must be a dictionary containing the maximal value for each metric for normalization
+    :return: The dest dictionary updated with new values from src
+    """
+    if maxima is None:
+        goodVals = {k: float(v) for k, v in src.items() if isMetricAllowed(k, regexp)}
+    else:
+        goodVals = {k: float(v) / (maxima[k] if maxima[k] != 0 else 1) for k, v in src.items() if isMetricAllowed(k, regexp)}
     dest.update(goodVals)
     return dest
 
 
-# Reads a CSV file containing benchmark/fault labels for each timestamp (i.e. as produced by log_to_labels) and stores
-# it in a dictionary whose keys are the timestamps
 def readLabelsasDict(path, key):
+    """
+    Reads a CSV file containing benchmark/fault labels for each timestamp (i.e. as produced by log_to_labels) and stores
+    it in a dictionary whose keys are the timestamps
+
+    :param path: Path to the CSV labels file
+    :param key: The name of the metric to be used as label for each timestamp
+    :return: A dictionary of timestamp keys to label values
+    """
     infile = open(path, 'r')
     reader = DictReader(infile, delimiter=CSVWriter.DELIMITER_CHAR)
     myDict = {}
@@ -83,13 +149,20 @@ def readLabelsasDict(path, key):
     return myDict
 
 
-# Given a string containing a list of task/fault labels together with the cores they are running on, and a core ID,
-# this function returns the string containing the sublist of tasks that belong to the specific core
-# By default a task running on a different core than the input one is discarded: the only exceptions are the following:
-# 1) No core was specified for analysis;
-# 2) The task was run on an undefined set of cores (NUMA policy disabled or set to all)
-# 3) The task is a "global" fault, which impacts the entire system regardless of the core it is run on
-def filterTaskLabels(label, core, isFault=False):
+def filterTaskLabels(label, core=None, isFault=False):
+    """
+    Given a string containing a list of task/fault labels together with the cores they are running on, and a core ID,
+    this function returns the string containing the sublist of tasks that belong to the specific core
+    By default a task running on a different core than the input one is discarded: the only exceptions are the following:
+    1) No core was specified for analysis;
+    2) The task was run on an undefined set of cores (NUMA policy disabled or set to all)
+    3) The task is a "global" fault, which impacts the entire system regardless of the core it is run on
+
+    :param label: String containing task labels, separated by comma
+    :param core: Number of the core being considered. If None, the analysis involves all cores
+    :param isFault: True if the labels correspond to fault programs, False otherwise
+    :return: A string containing the subset of task labels from the input that are valid for this analysis
+    """
     if label == CSVWriter.NONE_VALUE:
         return label
     labelGroup = label.split(CSVWriter.L1_DELIMITER_CHAR)
@@ -107,24 +180,46 @@ def filterTaskLabels(label, core, isFault=False):
     return finalLabel if finalLabel is not None else CSVWriter.NONE_VALUE
 
 
-# Given the queue of entries as defined in buildFeatures, this function returns True if its state is non-ambiguous.
-# The state is considered ambiguous if in the queue there are entries with different task labels (for example when
-# a fault or benchmark finished or has just started) which users may want to filter out to increase the quality
-# of the features
 def isStateAmbiguous(enQueue):
+    """
+    Given the queue of entries as defined in buildFeatures, this function returns True if its state is non-ambiguous.
+    The state is considered ambiguous if in the queue there are entries with different task labels (for example when
+    a fault or benchmark finished or has just started) which users may want to filter out to increase the quality
+    of the features
+
+    :param enQueue: The queue containing data point tuples (timestamp, metrics, derivatives, faultlabels, tasklabels)
+    :return: True if the considered state is ambiguous, False otherwise
+    """
     faultEquality = all(enQueue[0][3] == en[3] for en in enQueue)
     benchmarkEquality = all(enQueue[0][4] == en[4] for en in enQueue)
     return not (faultEquality and benchmarkEquality)
 
 
-# Given a list of paths corresponding to CSV files containing metrics to use, a file containing labels for each
-# timestamp, and a set of parameters, this script build an output CSV file containing features built from the input
-# metrics
-def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDerivatives=False):
+def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDerivatives=False, recentLabel=False, normalize=False):
+    """
+    Given a list of paths corresponding to CSV files containing metrics to use, a file containing labels for each
+    timestamp, and a set of parameters, this script build an output CSV file containing features built from the input
+    metrics
+
+    :param inpaths: Path to the input CSV files containing system performance metrics
+    :param labelfile: Path to the CSV file containing labels for each single timestamp
+    :param out: Path to the output features CSV file
+    :param window: Length (in samples) of the aggregation window
+    :param step: Step (in samples) between feature vectors
+    :param core: Core to be considered for analysis. If supplied, only per-core metrics related to that core (on top
+        of global metrics) will be considered, and only tasks running on that core will be used for labeling
+    :param useDerivatives: If True, first-order derivatives will be computed for each metric as well, and included
+        in feature vectors. This will double the size of feature vectors
+    :param recentLabel: If True, each feature vector is labeled by using only the label of the most recent data point
+        in the aggregation window. By default instead, the mode of all labels in the aggregation window is used
+    :param normalize: If True, normalization is performed, by considering the global maxima for every metric
+    """
     infiles = {}
     readers = {}
     # This regular expression identifies metrics that are related to the core we are analyzing
     regularexp = re.compile("[^0-9]" + core + "$") if core is not None else None
+    # If normalization is enabled, we first search for the global maxima of each metric
+    maxima = findMaxima(inpaths, regularexp) if normalize else None
     pilotReader = None
     for ind, p in enumerate(inpaths):
         if ind == 0:
@@ -156,15 +251,13 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
         except (StopIteration, IOError):
             break
         currTimestamp = int(entry[timeLabel].split('.')[0])
-        lastEntry = updateAndFilter(lastEntry, entry, regularexp)
-
+        lastEntry = updateAndFilter(lastEntry, entry, regularexp, maxima)
         for reader in readers.values():
             try:
                 entry = next(reader)
             except (StopIteration, IOError):
                 continue
-            lastEntry = updateAndFilter(lastEntry, entry, regularexp)
-
+            lastEntry = updateAndFilter(lastEntry, entry, regularexp, maxima)
         # We compute the label of the benchmark currently running on this core, if any
         try:
             currBenchmark = filterTaskLabels(labelDict[currTimestamp][benchmarkLabel], core, isFault=False)
@@ -172,7 +265,6 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
             print('- Timestamp %s not found' % currTimestamp)
             currBenchmark = CSVWriter.NONE_VALUE
         lastEntry[busyLabel] = 0.0 if currBenchmark == CSVWriter.NONE_VALUE else 1.0
-
         # We compute the label of the fault currently running on this core, if any
         # This must be performed here and not later, because otherwise having potentially multiple labels would
         # interfere with the aggregation process
@@ -180,7 +272,6 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
             currFault = filterTaskLabels(labelDict[currTimestamp][faultLabel], core, isFault=True)
         except KeyError:
             currFault = CSVWriter.NONE_VALUE
-
         # Having processed the current entry, we compute its first-order derivative
         currDerivative = computeDerivatives(entriesQueue[0][1], lastEntry) if len(entriesQueue) > 0 else None
         # We then insert the newly processed entry, together with its labels and derivative, into the deque
@@ -205,12 +296,12 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
             # The benchmark/fault labels of the feature are given by the mode of the respective fields
             try:
                 taskL = [en[4] for en in entriesQueue]
-                feature[benchmarkLabel] = mode(taskL)
+                feature[benchmarkLabel] = mode(taskL) if not recentLabel else taskL[0]
             except StatisticsError:
                 feature[benchmarkLabel] = max(set(taskL), key=taskL.count)
             try:
                 faultL = [en[3] for en in entriesQueue]
-                feature[faultLabel] = mode(faultL)
+                feature[faultLabel] = mode(faultL) if not recentLabel else faultL[0]
             except StatisticsError:
                 feature[faultLabel] = max(set(faultL), key=faultL.count)
             # The feature is written to the output file
@@ -220,7 +311,6 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
                 fieldict = {k: k for k in writer.fieldnames}
                 writer.writerow(fieldict)
             writer.writerow(feature)
-
     for f in infiles.values():
         f.close()
     outfile.close()
@@ -245,6 +335,11 @@ if __name__ == '__main__':
                         help="Selects a single core ID for which per-core metrics must be used.")
     parser.add_argument("-d", action="store_true", dest="useDeriv",
                         help="Include first-order derivatives as well in feature generation.")
+    parser.add_argument("-r", action="store_true", dest="labelMode",
+                        help="Instead of using the mode of single time points to create the feature vector labels, "
+                             "use only the label of the most recent time point.")
+    parser.add_argument("-n", action="store_true", dest="normalize",
+                        help="Normalize all metrics before feature generation.")
     args = parser.parse_args()
     sources = args.sources.split(',') if args.sources is not None else None
     if sources is None or args.labelfile is None:
@@ -254,5 +349,5 @@ if __name__ == '__main__':
         args.window = 1
     if args.step < 1:
         args. step = 1
-    buildFeatures(sources, args.labelfile, args.out, args.window, args.step, args.core, args.useDeriv)
+    buildFeatures(sources, args.labelfile, args.out, args.window, args.step, args.core, args.useDeriv, args.labelMode, args.normalize)
     exit(0)

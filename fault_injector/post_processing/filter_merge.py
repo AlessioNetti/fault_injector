@@ -3,9 +3,15 @@ from csv import DictWriter, DictReader
 import argparse
 
 
-# This function takes a list of CSV file paths as input. Optionally, it also takes a tuple of starting/end times
-# that must be used to perform filtering over the input files (for example, to extract data from a specific time frame)
 def mergeAndFilter(inpaths, out, times=None):
+    """
+    This function takes a list of CSV file paths as input. Optionally, it also takes a tuple of starting/end times
+    that must be used to perform filtering over the input files (for example, to extract data from a specific time frame)
+
+    :param inpaths: List of CSV file paths to be analyzed and merged
+    :param out: Path to the merged CSV output file
+    :param times: Tuple of starting/end times. If not None, only metrics falling within the interval will be used
+    """
     infiles = {}
     readers = {}
     for p in inpaths:

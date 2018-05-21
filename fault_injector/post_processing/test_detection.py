@@ -22,10 +22,18 @@ clfList = [RandomForestClassifier(n_estimators=50),
            MLPClassifier(activation='relu', hidden_layer_sizes=(1000, 1000))]
 
 
-# Given the filepath of an input CSV feature file, this function reads all features from the file and stores them in
-# a Numpy matrix suitable for use with SciKit classifiers. It returns the feature matrix and the list of labels for
-# each feature.
 def loadFeatures(inpath, maxFeatures=-1, noMix=False, discardDerivs=False):
+    """
+    Given the filepath of an input CSV feature file, this function reads all features from the file and stores them in
+    a Numpy matrix suitable for use with SciKit classifiers. It returns the feature matrix and the list of labels for
+    each feature.
+
+    :param inpath: path to the input CSV features file
+    :param maxFeatures: Maximum number of features to be read
+    :param noMix: If True, all feature vectors belonging to ambiguous system states (#mixed != 0) are discarded
+    :param discardDerivs: If True, all metrics related to first-order derivatives are removed from feature vectors
+    :return: A Numpy matrix in which each row is a feature vector, and a list of labels
+    """
     fieldBlacklist = [timeLabel, faultLabel, benchmarkLabel, mixedLabel]
     infile = open(inpath, 'r')
     reader = DictReader(infile)
@@ -57,9 +65,14 @@ def loadFeatures(inpath, maxFeatures=-1, noMix=False, discardDerivs=False):
     return np.array(featureMatrix, dtype=np.float64), np.array(labelMatrix, dtype=str), np.array(sortedKeys)
 
 
-# Creates a dictionary of SciKit scorer objects. Each object considers features from a specific class out of those
-# given as input, and the metric used here is the F-Score
 def getScorerObjects(labels):
+    """
+    Creates a dictionary of SciKit scorer objects. Each object considers features from a specific class out of those
+    given as input, and the metric used here is the F-Score
+
+    :param labels:
+    :return:
+    """
     labelSet = set(labels)
     scorers = {}
     for label in labelSet:
@@ -75,13 +88,13 @@ if __name__ == '__main__':
     parser.add_argument("-f", action="store", dest="source", type=str, default=None,
                         help="Path to the CSV features file to be used.")
     parser.add_argument("-m", action="store", dest="maxf", type=int, default=-1,
-                        help="Maximum number of features to be processed")
+                        help="Maximum number of feature vectors to be processed")
     parser.add_argument("-p", action="store", dest="impMetrics", type=int, default=0,
                         help="Number of most important metrics to print when using supported classifiers.")
     parser.add_argument("-n", action="store_true", dest="noMix",
-                        help="Use only features corresponding to non-ambiguous states.")
+                        help="Use only feature vectors corresponding to non-ambiguous states.")
     parser.add_argument("-d", action="store_true", dest="discardDerivs",
-                        help="Discard metrics related to first-order derivatives in features.")
+                        help="Discard metrics related to first-order derivatives in feature vectors.")
     args = parser.parse_args()
     if args.source is None:
         print("You must supply the path to the features file that must be used!")
@@ -91,13 +104,13 @@ if __name__ == '__main__':
     print('---------- FINJ CROSS-VALIDATION TOOL ----------')
     print('- Input filename: %s' % args.source)
     if args.noMix:
-        print('- Ambiguous features are being discarded.')
+        print('- Ambiguous feature vectors are being discarded.')
     if args.discardDerivs:
-        print('- First-order derivatives are being discarded from features.')
+        print('- First-order derivatives are being discarded from feature vectors.')
     print('- Loading features...')
     features, labels, metricKeys = loadFeatures(args.source, maxFeatures=args.maxf, noMix=args.noMix, discardDerivs=args.discardDerivs)
-    print('- Feature length is %s...' % len(features[0, :]))
-    print('- Number of features is %s...' % len(features[:, 0]))
+    print('- Feature vector length is %s...' % len(features[0, :]))
+    print('- Number of feature vectors is %s...' % len(features[:, 0]))
     print('- Performing cross-validation...')
     print('---------------')
     warnings.filterwarnings('ignore')

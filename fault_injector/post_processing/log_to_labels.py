@@ -7,9 +7,19 @@ from os.path import split
 import argparse
 
 
-# Given a benchmark and fault label, and a start/end timestamp couple, this function writes all timestamps with the
-# specified label from the start to the end of the interval
+
 def fillTimestamps(writer, curr_bench, curr_fault, start, end, step):
+    """
+    Given a benchmark and fault label, and a start/end timestamp couple, this function writes all timestamps with the
+    specified label from the start to the end of the interval
+
+    :param writer: Writer object for the output CSV file
+    :param curr_bench: Label(s) for the currently running benchmark
+    :param curr_fault: Label(s) for the currently running fault programs
+    :param start: Starting timestamp for the current system status
+    :param end: End timestamp (exclusive) for the current system state
+    :param step: Step between each filled timestamp in the interval
+    """
     label_separator = CSVWriter.L1_DELIMITER_CHAR
     curr_timestamp = start
     buffdict = {}
@@ -23,8 +33,17 @@ def fillTimestamps(writer, curr_bench, curr_fault, start, end, step):
         curr_timestamp += step
 
 
-# Reads a FINJ execution record, and outputs a file containing timestamps and task labels
 def convertLogToLabelFile(inpath, outpath, step=1, showNums=False):
+    """
+    Reads a FINJ execution record, and outputs a file containing timestamps mapped to task labels
+
+    :param inpath: Path of the input FINJ execution record
+    :param outpath: Output path for the processed file
+    :param step: Step to use between timestamps in the output file
+    :param showNums: By default, each task label also contains the list of cores assigned to the task. If this argument
+        is True, the sequence number of the task is used instead
+    :return:
+    """
     labelNames = [timeLabel, faultLabel, benchmarkLabel]
     reader = ExecutionLogReader(inpath)
     outfile = open(outpath, 'w')

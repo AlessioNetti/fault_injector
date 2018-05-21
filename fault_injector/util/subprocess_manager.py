@@ -12,6 +12,11 @@ class SubprocessManager:
     logger = logging.getLogger('SubprocessManager')
 
     def __init__(self, commands=None):
+        """
+        Constructor for the class
+
+        :param commands: The list of command strings for each task that must be launched
+        """
         self._commands = commands
         self._processes = None
 
