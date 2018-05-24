@@ -81,7 +81,8 @@ def convertLogToLabelFile(inpath, outpath, step=1, showNums=False):
             fillTimestamps(writer, curr_bench, curr_fault, curr_timestamp, int(entry['timestamp']), step)
             curr_bench = []
             curr_fault = []
-        curr_timestamp = int(entry['timestamp'])
+        if entry['type'] != 'status_restart':
+            curr_timestamp = int(entry['timestamp'])
         entry = reader.read_entry()
     reader.close()
     outfile.close()

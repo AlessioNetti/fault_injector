@@ -42,9 +42,10 @@ def findMaxima(inpaths, regexp):
                 infiles.pop(p)
                 break
             for k, v in entry.items():
-                value = float(v)
-                if isMetricAllowed(k, regexp) and (k not in maxima or value > maxima[k]):
-                    maxima[k] = value
+                if isMetricAllowed(k, regexp):
+                    value = float(v)
+                    if k not in maxima or value > maxima[k]:
+                        maxima[k] = value
     return maxima
 
 
