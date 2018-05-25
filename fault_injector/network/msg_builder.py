@@ -125,10 +125,12 @@ class MessageBuilder:
         return msg
 
     @staticmethod
-    def status_error(t, error):
+    def status_error(t, error, output=None):
         msg = {MessageBuilder.FIELD_TYPE: MessageBuilder.STATUS_ERR}
         if error is not None:
             msg[MessageBuilder.FIELD_ERR] = error
+        if output is not None:
+            msg[MessageBuilder.FIELD_OUTPUT] = output
         msg = MessageBuilder._build_fields(msg, t.args, t.duration, t.seqNum, t.timestamp, t.isFault, t.cores)
         return msg
 

@@ -355,6 +355,8 @@ class InjectorClient:
                 InjectorClient.logger.error("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
                 self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
+                if not self._suppressOutput:
+                    self._write_task_output(addr, msg)
             elif msg_type == MessageBuilder.ACK_YES:
                 # ACK messages after the initialization phase are received ONLY when a connection is restored,
                 # and the session must be resumed
@@ -402,6 +404,8 @@ class InjectorClient:
             elif msg_type == MessageBuilder.STATUS_ERR:
                 InjectorClient.logger.error("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
+                if not self._suppressOutput:
+                    self._write_task_output(addr, msg)
             elif msg_type == MessageBuilder.STATUS_GREET:
                 status_string = 'An injection session is in progress' if msg[MessageBuilder.FIELD_ISF] else \
                     'No injection session is in progress'

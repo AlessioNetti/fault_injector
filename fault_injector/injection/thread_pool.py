@@ -483,12 +483,12 @@ class InjectionThreadPool(ThreadPool):
         :param outdata: the shell output of the task, if it is a benchmark
         """
         task.timestamp = timestamp
+        # If output logging is not enabled, or the task is not a benchmark, the output data is discarded
+        if not self._log_outputs or task.isFault or len(outdata) == 0:
+            outdata = None
         if rcode != 0:
-            msg = MessageBuilder.status_error(task, rcode)
+            msg = MessageBuilder.status_error(task, rcode, outdata)
         else:
-            # If output logging is not enabled, or the task is not a benchmark, the output data is discarded
-            if not self._log_outputs or task.isFault or len(outdata) == 0:
-                outdata = None
             msg = MessageBuilder.status_end(task, outdata)
         if msg is not None and not current_thread().has_to_terminate():
             self._server.broadcast_msg(msg)
