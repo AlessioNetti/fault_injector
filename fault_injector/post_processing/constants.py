@@ -2,21 +2,26 @@
 # your workload, together with the monitoring system that you used.
 
 # List of fault types that are meaningful only when the system is not idling
-busyFaults = ['cpufreq', 'ioerr']
+
+# Local busy faults are meaningful only for cores on which some application is currently running
+# i.e. cpufreq = CPU frequency scaling has impact only on specific cores that are currently busy with an application.
+# For other idling cores, frequency scaling will not be altered in any way
+localBusyFaults = ['cpufreq']
+
+# Global busy faults are meaningful for all cores, if there is at least one application running on the system
+# i.e. ioerr = I/O errors are not core-specific, and will detected on any of them if some application writes on a disk,
+# even if it is running on a different core than the one being analyzed
+globalBusyFaults = ['ioerr']
 
 # List of fault types that only impact the core they are running on
+# Note that this has nothing to do with localBusyFaults: localFaults refers to the core the FAULT is running on, while
+# localBusyFaults refers to the core the BENCHMARK is running on
 localFaults = ['dial', 'ddot']
 
-# Labels used in the post-processed CSV files
-timeLabel = '#Time'
-benchmarkLabel = '#Benchmark'
-faultLabel = '#Fault'
-mixedLabel = '#Mixed'
-busyLabel = 'allocated'
-derivLabel = '_der'
-
-# Labels for metrics that are per-core and not aggregated, used in build_features
-perCoreLabels = ['per_core_', '#']
+# The range of cores to be considered for building the per-core "allocated" metric, which defines whether a user
+# application is running on such core at a given timestamp or it is idling. The bounds are inclusive
+# This range is also used in the test_detection script to split features into core-specific sets
+coreRange = [0, 7]
 
 # Whitelist of metrics to be considered in the filter_merge script
 metricsWhitelist = ['#Time', 'Active', 'cpu_freq.0']
@@ -41,18 +46,18 @@ metricsBlacklist = [  # CONSTANT METRICS FROM PROCSTAT
                     'per_core_guest_nice9', 'per_core_guest_nice10', 'per_core_guest_nice11', 'per_core_guest_nice12', 'per_core_guest_nice13',
                     'per_core_guest_nice14', 'per_core_guest_nice15',
                       # CONSTANT METRICS FROM MEMINFO
-                    'MemTotal', 'Buffers', 'SwapCached', 'Unevictable', 'Mlocked', 'SwapTotal', 'SwapFree', 'NFS_Unstable',
+                    'MemTotal', 'SwapCached', 'Unevictable', 'Mlocked', 'SwapTotal', 'SwapFree', 'NFS_Unstable',
                     'Bounce', 'WritebackTmp', 'CommitLimit', 'VmallocTotal', 'VmallocUsed', 'VmallocChunk', 'HardwareCorrupted',
                     'HugePages_Total', 'HugePages_Free', 'HugePages_Rsvd', 'HugePages_Surp', 'Hugepagesize', 'DirectMap4k', 'DirectMap2M', 'DirectMap1G',
                       # CONSTANT METRICS FROM VMSTAT
                     'nr_unevictable', 'nr_mlock', 'nr_unstable', 'nr_bounce', 'nr_vmscan_write', 'nr_vmscan_immediate_reclaim',
-                    'nr_writeback_temp', 'nr_isolated_file', 'numa_miss', 'numa_foreign', 'numa_interleave', 'workingset_refault',
+                    'nr_writeback_temp', 'nr_isolated_file', 'numa_interleave', 'workingset_refault',
                     'workingset_activate', 'workingset_nodereclaim', 'nr_free_cma', 'pswpin', 'pswpout', 'pgalloc_dma', 'pgalloc_movable',
                     'pgdeactivate', 'pgrefill_dma', 'pgrefill_dma32', 'pgrefill_normal', 'pgrefill_movable', 'pgsteal_kswapd_dma', 'pgsteal_kswapd_dma32',
                     'pgsteal_kswapd_normal', 'pgsteal_kswapd_movable', 'pgsteal_direct_dma', 'pgsteal_direct_dma32', 'pgsteal_direct_normal', 'pgsteal_direct_movable',
                     'pgscan_kswapd_dma', 'pgscan_kswapd_dma32', 'pgscan_kswapd_normal', 'pgscan_kswapd_movable', 'pgscan_direct_dma', 'pgscan_direct_dma32',
                     'pgscan_direct_normal', 'pgscan_direct_movable', 'pgscan_direct_throttle', 'zone_reclaim_failed', 'pginodesteal', 'slabs_scanned', 'kswapd_inodesteal',
-                    'kswapd_low_wmark_hit_quickly', 'kswapd_high_wmark_hit_quickly', 'pageoutrun', 'allocstall', 'pgrotated', 'drop_pagecache', 'drop_slab',
+                    'kswapd_low_wmark_hit_quickly', 'kswapd_high_wmark_hit_quickly', 'pageoutrun', 'allocstall', 'drop_pagecache', 'drop_slab',
                     'compact_migrate_scanned', 'compact_free_scanned', 'compact_isolated', 'compact_stall', 'compact_fail', 'compact_success',
                     'htlb_buddy_alloc_success', 'htlb_buddy_alloc_fail', 'unevictable_pgs_culled', 'unevictable_pgs_scanned', 'unevictable_pgs_rescued',
                     'unevictable_pgs_mlocked', 'unevictable_pgs_munlocked', 'unevictable_pgs_cleared', 'unevictable_pgs_stranded',
@@ -92,9 +97,7 @@ metricsBlacklist = [  # CONSTANT METRICS FROM PROCSTAT
                     'irq.28#4', 'irq.28#5', 'irq.28#6', 'irq.28#7', 'irq.28#8', 'irq.28#9', 'irq.28#10', 'irq.28#11',
                     'irq.28#12', 'irq.28#13', 'irq.28#14', 'irq.28#15', 'irq.29#0', 'irq.29#1', 'irq.29#2', 'irq.29#3',
                     'irq.29#4', 'irq.29#5', 'irq.29#6', 'irq.29#7', 'irq.29#8', 'irq.29#9', 'irq.29#10', 'irq.29#11',
-                    'irq.29#12', 'irq.29#13', 'irq.29#14', 'irq.29#15', 'irq.47#0', 'irq.47#1', 'irq.47#2', 'irq.47#3',
-                    'irq.47#4', 'irq.47#5', 'irq.47#6', 'irq.47#7', 'irq.47#8', 'irq.47#9', 'irq.47#10', 'irq.47#11',
-                    'irq.47#12', 'irq.47#13', 'irq.47#14', 'irq.47#15', 'irq.49#0', 'irq.49#1', 'irq.49#2', 'irq.49#3',
+                    'irq.29#12', 'irq.29#13', 'irq.29#14', 'irq.29#15', 'irq.49#0', 'irq.49#1', 'irq.49#2', 'irq.49#3',
                     'irq.49#4', 'irq.49#5', 'irq.49#6', 'irq.49#7', 'irq.49#8', 'irq.49#9', 'irq.49#10', 'irq.49#11',
                     'irq.49#12', 'irq.49#13', 'irq.49#14', 'irq.49#15', 'irq.66#0', 'irq.66#1', 'irq.66#2', 'irq.66#3',
                     'irq.66#4', 'irq.66#5', 'irq.66#6', 'irq.66#7', 'irq.66#8', 'irq.66#9', 'irq.66#10', 'irq.66#11',
@@ -144,6 +147,19 @@ metricsBlacklist = [  # CONSTANT METRICS FROM PROCSTAT
                     'irq.MCE#4', 'irq.MCE#5', 'irq.MCE#6', 'irq.MCE#7', 'irq.MCE#8', 'irq.MCE#9', 'irq.MCE#10', 'irq.MCE#11',
                     'irq.MCE#12', 'irq.MCE#13', 'irq.MCE#14', 'irq.MCE#15'
                     ]
+
+# Labels used in the post-processed CSV files
+timeLabel = '#Time'
+benchmarkLabel = '#Benchmark'
+faultLabel = '#Fault'
+mixedLabel = '#Mixed'
+busyLabel = 'allocated'
+derivLabel = '_der'
+
+# Labels for metrics that are per-core and not aggregated, used in build_features
+# ATTENTION: The first of the labels in this list is considered the most "important" and is used to name the per-core
+# "allocated" metric during feature building
+perCoreLabels = ['per_core_']  # , '#']
 
 if __name__ == '__main__':
     print('There are currently %s entries in the metrics blacklist.' % len(metricsBlacklist))

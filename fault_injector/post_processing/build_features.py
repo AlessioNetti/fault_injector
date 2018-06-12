@@ -1,6 +1,7 @@
 from fault_injector.io.writer import CSVWriter
 from fault_injector.post_processing.constants import metricsBlacklist, faultLabel, timeLabel, benchmarkLabel
 from fault_injector.post_processing.constants import perCoreLabels, localFaults, busyLabel, mixedLabel, derivLabel
+from fault_injector.post_processing.constants import coreRange, localBusyFaults, globalBusyFaults
 from fault_injector.util.misc import TASKNAME_SEPARATOR, VALUE_ALL_CORES
 from csv import DictWriter, DictReader
 from scipy.stats import kurtosis, skew
@@ -17,12 +18,12 @@ percentiles = [0, 5, 25, 50, 75, 95, 100]
 allowedMetricsLUT = {}
 
 
-def findMaxima(inpaths, regexp):
+def findMaxima(inpaths, core):
     """
     Given a list of paths to CSV metric files, returns a dictionary containing the global maximum for each metric key
 
     :param inpaths: A list of CSV file paths containing system performance metrics
-    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :param regexp: If not None, must be a string representing the ID of the analyzed core
     :return: A dictionary of maximal values for each metric key
     """
     maxima = {}
@@ -42,7 +43,7 @@ def findMaxima(inpaths, regexp):
                 infiles.pop(p)
                 break
             for k, v in entry.items():
-                if isMetricAllowed(k, regexp):
+                if isMetricAllowed(k, core):
                     value = float(v)
                     if k not in maxima or value > maxima[k]:
                         maxima[k] = value
@@ -88,35 +89,52 @@ def getStatistics(myData, metricName):
     return stats
 
 
-def isMetricAllowed(k, regexp):
+def isMetricAllowed(k, core):
     """
     Returns True if the given metric name is allowed for use in the feature, and False otherwise.
     A metric is NOT allowed if it belongs to the metrics blacklist (defined in the constants file), or if it belongs
     to a core that is not the one we are building metrics for
 
     :param k: key of a given metric
-    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :param core: If not None, must be a string representing the ID of the analyzed core
     :return: True if metric k is allowed, False otherwise
     """
     if k not in allowedMetricsLUT.keys():
-        allowedMetricsLUT[k] = k not in metricsBlacklist and (not any(l in k for l in perCoreLabels) or regexp.search(k) if regexp is not None else True)
+        # Checking if the metric is per-core
+        if any(l in k for l in perCoreLabels):
+            if core is not None:
+                # If we supplied a core for analysis, we check that the metric corresponds to that core
+                regularexp = re.compile("[^0-9]" + core + "$")
+                belongsToCore = True if regularexp.search(k) is not None else False
+            else:
+                # Otherwise, we check over all core IDs defined in coreRange for a match
+                belongsToCore = False
+                for c in range(coreRange[0], coreRange[1] + 1):
+                    regularexp = re.compile("[^0-9]" + str(c) + "$")
+                    belongsToCore = True if regularexp.search(k) is not None else False
+                    if belongsToCore:
+                        break
+        else:
+            # If the metric is not per-core, there is no check to perform
+            belongsToCore = True
+        allowedMetricsLUT[k] = k not in metricsBlacklist and belongsToCore
     return allowedMetricsLUT[k]
 
 
-def updateAndFilter(dest, src, regexp=None, maxima=None):
+def updateAndFilter(dest, src, core=None, maxima=None):
     """
     Updates a features dictionary with entries from a second, new dictionary, by filtering out those that are not allowed
 
     :param dest: Dictionary that must be updated with new values
     :param src: Dictionary containing new values that must be integrated in the old dictionary
-    :param regexp: If not None, must be a regular expression object matching metrics that belong to a specified core
+    :param core: If not None, must be a string representing the ID of the analyzed core
     :param maxima: If not None, must be a dictionary containing the maximal value for each metric for normalization
     :return: The dest dictionary updated with new values from src
     """
     if maxima is None:
-        goodVals = {k: float(v) for k, v in src.items() if isMetricAllowed(k, regexp)}
+        goodVals = {k: float(v) for k, v in src.items() if isMetricAllowed(k, core)}
     else:
-        goodVals = {k: float(v) / (maxima[k] if maxima[k] != 0 else 1) for k, v in src.items() if isMetricAllowed(k, regexp)}
+        goodVals = {k: float(v) / (maxima[k] if maxima[k] != 0 else 1) for k, v in src.items() if isMetricAllowed(k, core)}
     dest.update(goodVals)
     return dest
 
@@ -150,7 +168,7 @@ def readLabelsasDict(path, key):
     return myDict
 
 
-def filterTaskLabels(label, core=None, isFault=False):
+def filterTaskLabels(label, core=None, isFault=False, busy=(True, True)):
     """
     Given a string containing a list of task/fault labels together with the cores they are running on, and a core ID,
     this function returns the string containing the sublist of tasks that belong to the specific core
@@ -159,9 +177,14 @@ def filterTaskLabels(label, core=None, isFault=False):
     2) The task was run on an undefined set of cores (NUMA policy disabled or set to all)
     3) The task is a "global" fault, which impacts the entire system regardless of the core it is run on
 
+    In addition, fault tasks that are of the "busy" type (they require applications to be running in the system) will be
+    discarded if the system is not busy at either the global or local level
+
     :param label: String containing task labels, separated by comma
     :param core: Number of the core being considered. If None, the analysis involves all cores
     :param isFault: True if the labels correspond to fault programs, False otherwise
+    :param busy: A tuple of two booleans. The first element is True if there is one application running on the system
+        as a whole, and the second is True if there is one application running on the specified core
     :return: A string containing the subset of task labels from the input that are valid for this analysis
     """
     if label == CSVWriter.NONE_VALUE:
@@ -172,12 +195,20 @@ def filterTaskLabels(label, core=None, isFault=False):
         splitName = label.rsplit(TASKNAME_SEPARATOR, 1)
         taskname = splitName[0]
         labelCores = splitName[1] if len(splitName) == 2 else VALUE_ALL_CORES
-        if core is None or labelCores == VALUE_ALL_CORES or core in labelCores.split(',') or (isFault and taskname not in localFaults):
-            if finalLabel is None:
-                finalLabel = taskname
-            else:
-                print('There may be multiple tasks running at the same time in the workload. This is not allowed as'
-                      ' it would lead to multiple labels for each feature.')
+        # Verifying the conditions for the validity of the label
+        if not (core is None or labelCores == VALUE_ALL_CORES or core in labelCores.split(',') or (isFault and taskname not in localFaults)):
+            continue
+        # Verifying that the task is not a fault belonging to the busy-only class
+        if core is not None and isFault and ((not busy[0] and taskname in globalBusyFaults) or (not busy[1] and taskname in localBusyFaults)):
+            continue
+
+        if finalLabel is None:
+            # If a core was specified, we strip the core information from the label, as it is redundant
+            # If no core was specified, the core information is kept for further post-processing
+            finalLabel = label if core is None else taskname
+        else:
+            print('There may be multiple tasks running at the same time in the workload. This is not allowed as'
+                  ' it would lead to multiple labels for each feature.')
     return finalLabel if finalLabel is not None else CSVWriter.NONE_VALUE
 
 
@@ -194,6 +225,33 @@ def isStateAmbiguous(enQueue):
     faultEquality = all(enQueue[0][3] == en[3] for en in enQueue)
     benchmarkEquality = all(enQueue[0][4] == en[4] for en in enQueue)
     return not (faultEquality and benchmarkEquality)
+
+
+def computeBusyMetrics(benchmarkLabel, core=None):
+    """
+    Computes a set of metrics that defines whether the system is busy at system and core levels, i.e. running a
+    benchmark.
+
+    :param benchmarkLabel: A string containing the set of comma-separated labels of tasks currently running on the
+        system, each labeled with the set of cores it is executed on
+    :param core: The core that must be used for analysis, if any, or None. If None, all cores will be considered and
+        metrics will be computed for them
+    :return: A tuple containing a label for this timepoint, corresponding to a currently running application, and a
+        dictionary of "busy" metrics for the entire system and each core, if required
+    """
+    metricsDict = {}
+    # This first metric is the GLOBAL busy metric, which is set to 1 if there is at least one application running on
+    # the system
+    metricsDict[busyLabel] = 0.0 if benchmarkLabel == CSVWriter.NONE_VALUE else 1.0
+    currBenchmark = filterTaskLabels(benchmarkLabel, core, isFault=False)
+    # Then we compute the per-core busy metrics
+    if core is not None:
+        metricsDict[perCoreLabels[0] + busyLabel + core] = 0.0 if currBenchmark == CSVWriter.NONE_VALUE else 1.0
+    else:
+        for c in range(coreRange[0], coreRange[1] + 1):
+            percoreBenchmark = filterTaskLabels(benchmarkLabel, str(c), isFault=False)
+            metricsDict[perCoreLabels[0] + busyLabel + str(c)] = 0.0 if percoreBenchmark == CSVWriter.NONE_VALUE else 1.0
+    return currBenchmark, metricsDict
 
 
 def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDerivatives=False, recentLabel=False, normalize=False):
@@ -217,10 +275,8 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
     """
     infiles = {}
     readers = {}
-    # This regular expression identifies metrics that are related to the core we are analyzing
-    regularexp = re.compile("[^0-9]" + core + "$") if core is not None else None
     # If normalization is enabled, we first search for the global maxima of each metric
-    maxima = findMaxima(inpaths, regularexp) if normalize else None
+    maxima = findMaxima(inpaths, core) if normalize else None
     pilotReader = None
     for ind, p in enumerate(inpaths):
         if ind == 0:
@@ -252,25 +308,28 @@ def buildFeatures(inpaths, labelfile, out, window=60, step=10, core=None, useDer
         except (StopIteration, IOError):
             break
         currTimestamp = int(entry[timeLabel].split('.')[0])
-        lastEntry = updateAndFilter(lastEntry, entry, regularexp, maxima)
+        lastEntry = updateAndFilter(lastEntry, entry, core, maxima)
         for reader in readers.values():
             try:
                 entry = next(reader)
             except (StopIteration, IOError):
                 continue
-            lastEntry = updateAndFilter(lastEntry, entry, regularexp, maxima)
+            lastEntry = updateAndFilter(lastEntry, entry, core, maxima)
         # We compute the label of the benchmark currently running on this core, if any
         try:
-            currBenchmark = filterTaskLabels(labelDict[currTimestamp][benchmarkLabel], core, isFault=False)
+            currBenchmark, busyMetrics = computeBusyMetrics(labelDict[currTimestamp][benchmarkLabel], core)
         except KeyError:
             print('- Timestamp %s not found' % currTimestamp)
             currBenchmark = CSVWriter.NONE_VALUE
-        lastEntry[busyLabel] = 0.0 if currBenchmark == CSVWriter.NONE_VALUE else 1.0
+            busyMetrics = {}
+        lastEntry = updateAndFilter(lastEntry, busyMetrics, None, None)
         # We compute the label of the fault currently running on this core, if any
         # This must be performed here and not later, because otherwise having potentially multiple labels would
         # interfere with the aggregation process
         try:
-            currFault = filterTaskLabels(labelDict[currTimestamp][faultLabel], core, isFault=True)
+            busyGlobal = lastEntry[busyLabel] != 0.0
+            busyLocal = True if core is None else lastEntry[perCoreLabels[0] + busyLabel + core] != 0.0
+            currFault = filterTaskLabels(labelDict[currTimestamp][faultLabel], core, isFault=True, busy=(busyGlobal, busyLocal))
         except KeyError:
             currFault = CSVWriter.NONE_VALUE
         # Having processed the current entry, we compute its first-order derivative
