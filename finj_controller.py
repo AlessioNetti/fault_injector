@@ -1,10 +1,10 @@
-from fault_injector.injection.fault_injector_client import InjectorClient
+from fault_injector.injection.fault_injector_controller import InjectorController
 from fault_injector.io.reader import CSVReader
 import logging, sys, argparse
 
 
 # Configuring the input arguments to the script, and parsing them
-parser = argparse.ArgumentParser(description="Fin-J Fault Injection Client")
+parser = argparse.ArgumentParser(description="Fin-J Fault Injection Controller")
 parser.add_argument("-c", action="store", dest="config", type=str, default=None, help="Path to a configuration file.")
 parser.add_argument("-w", action="store", dest="workload", type=str, default=None, help="Path of the CSV workload file.")
 parser.add_argument("-m", action="store", dest="max_tasks", type=int, default=None, help="Maximum number of tasks to be injected.")
@@ -21,6 +21,6 @@ else:
 hosts = [addr.strip() for addr in args.hosts.split(',')] if args.hosts is not None else None
 
 reader = CSVReader(path=args.workload) if args.workload is not None else None
-inj = InjectorClient.build(config=args.config, hosts=hosts)
+inj = InjectorController.build(config=args.config, hosts=hosts)
 inj.inject(reader=reader, max_tasks=args.max_tasks, suppress_output=args.probe)
 inj.stop()

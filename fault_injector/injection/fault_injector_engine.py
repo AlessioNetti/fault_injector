@@ -9,13 +9,13 @@ from fault_injector.io.task import Task
 from fault_injector.util.subprocess_manager import SubprocessManager
 
 
-class InjectorServer:
+class InjectorEngine:
     """
     This class manages the entire fault injection process, by executing tasks and communicating their outcome
     """
 
     # Logger for the class
-    logger = logging.getLogger('InjectorServer')
+    logger = logging.getLogger('InjectorEngine')
 
     @staticmethod
     def build(config=None, port=None):
@@ -35,7 +35,7 @@ class InjectorServer:
         pool = InjectionThreadPool(msg_server=se, max_requests=cfg['MAX_REQUESTS'], skip_expired=cfg['SKIP_EXPIRED'],
                                    retry_tasks=cfg['RETRY_TASKS'], retry_on_error=cfg['RETRY_TASKS_ON_ERROR'], log_outputs=cfg['LOG_OUTPUTS'],
                                    root=cfg['ENABLE_ROOT'], numa_cores=(cfg['NUMA_CORES_FAULTS'], cfg['NUMA_CORES_BENCHMARKS']))
-        inj_s = InjectorServer(serverobj=se, poolobj=pool, kill_abruptly=cfg['ABRUPT_TASK_KILL'], aux_commands=cfg['AUX_COMMANDS'])
+        inj_s = InjectorEngine(serverobj=se, poolobj=pool, kill_abruptly=cfg['ABRUPT_TASK_KILL'], aux_commands=cfg['AUX_COMMANDS'])
         return inj_s
 
     def __init__(self, serverobj, poolobj, kill_abruptly=True, aux_commands=None):
@@ -47,7 +47,7 @@ class InjectorServer:
         :param kill_abruptly: Boolean flag. See InjectionThreadPool for details
         :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the server
         """
-        assert isinstance(serverobj, MessageServer), 'InjectorServer needs a Server object in its constructor!'
+        assert isinstance(serverobj, MessageServer), 'InjectorEngine needs a Server object in its constructor!'
         self._server = serverobj
         self._master = None
         self._subman = SubprocessManager(commands=aux_commands)
@@ -87,7 +87,7 @@ class InjectorServer:
                 reply = MessageBuilder.status_greet(time(), self._pool.active_tasks(), self._master is not None)
                 self._server.send_msg(addr, reply)
             else:
-                InjectorServer.logger.warning('Invalid command sent from non-master host %s', formatipport(addr))
+                InjectorEngine.logger.warning('Invalid command sent from non-master host %s', formatipport(addr))
 
     def _check_for_termination(self, addr, msg):
         """
@@ -116,7 +116,7 @@ class InjectorServer:
             self._master = None
             self._session_timestamp = -1
             ack = True
-            InjectorServer.logger.info('Injection session terminated with client %s' % formatipport(addr))
+            InjectorEngine.logger.info('Injection session terminated with controller %s' % formatipport(addr))
         elif msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.COMMAND_START_SESSION:
             session_ts = msg[MessageBuilder.FIELD_TIME]
             addresses = self._server.get_registered_hosts()
@@ -134,9 +134,9 @@ class InjectorServer:
                 self._master = addr
                 self._session_timestamp = session_ts
                 ack = True
-                InjectorServer.logger.info('Injection session started with client %s' % formatipport(addr))
+                InjectorEngine.logger.info('Injection session started with controller %s' % formatipport(addr))
             else:
-                InjectorServer.logger.info('Injection session rejected with client %s' % formatipport(addr))
+                InjectorEngine.logger.info('Injection session rejected with controller %s' % formatipport(addr))
             # An ack (positive or negative) is sent to the sender host
         self._server.send_msg(addr, MessageBuilder.ack(time(), ack, err))
 
@@ -145,9 +145,9 @@ class InjectorServer:
         A signal handler to perform a graceful exit procedure on SIGINT 
         """
         if sig == signal.SIGINT or sig == signal.SIGTERM:
-            InjectorServer.logger.info('Exit requested by user. Cleaning up...')
+            InjectorEngine.logger.info('Exit requested by user. Cleaning up...')
             self._pool.stop(kill_abruptly=self._kill_abruptly)
             self._server.stop()
             self._subman.stop_subprocesses()
-            InjectorServer.logger.info('Injection server stopped by user!')
+            InjectorEngine.logger.info('Injection engine stopped by user!')
             exit()

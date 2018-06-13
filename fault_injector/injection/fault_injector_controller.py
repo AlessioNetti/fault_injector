@@ -13,7 +13,7 @@ from time import sleep, time
 from shutil import rmtree
 
 
-class InjectorClient:
+class InjectorController:
     """
     This class implement the fault injection client
 
@@ -23,7 +23,7 @@ class InjectorClient:
     """
 
     # Logger for the class
-    logger = logging.getLogger('InjectorClient')
+    logger = logging.getLogger('InjectorController')
 
     def __init__(self, clientobj, workload_padding=20, pre_send_interval=600, session_wait=60, results_dir='results', aux_commands=None):
         """
@@ -40,7 +40,7 @@ class InjectorClient:
         :param results_dir: Path of the results' directory, where the execution logs will be saved
         :param aux_commands: A list of commands corresponding to subtasks that must be executed alongside the injector
         """
-        assert isinstance(clientobj, MessageClient), 'InjectorClient needs a Client object in its constructor!'
+        assert isinstance(clientobj, MessageClient), 'InjectorController needs a Client object in its constructor!'
         self._client = clientobj
         self._subman = SubprocessManager(commands=aux_commands)
         self._suppressOutput = False
@@ -81,7 +81,7 @@ class InjectorClient:
         """
         cfg = ConfigLoader.getConfig(config)
         cl = MessageClient(retry_interval=cfg['RETRY_INTERVAL'], retry_period=cfg['RETRY_PERIOD'], re_send_msgs=cfg['RECOVER_AFTER_DISCONNECT'])
-        inj_c = InjectorClient(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'], pre_send_interval=cfg['PRE_SEND_INTERVAL'],
+        inj_c = InjectorController(clientobj=cl, workload_padding=cfg['WORKLOAD_PADDING'], pre_send_interval=cfg['PRE_SEND_INTERVAL'],
                                session_wait=cfg['SESSION_WAIT'], results_dir=cfg['RESULTS_DIR'], aux_commands=cfg['AUX_COMMANDS'])
         if hosts is None or len(hosts) == 0:
             hosts = cfg['HOSTS']
@@ -129,7 +129,7 @@ class InjectorClient:
         assert isinstance(reader, Reader), '_inject method only supports Reader objects!'
         task = reader.read_entry()
         if task is None:
-            InjectorClient.logger.warning("Input workload appears to be empty. Aborting...")
+            InjectorController.logger.warning("Input workload appears to be empty. Aborting...")
             return
 
         self._client.start()
@@ -137,7 +137,7 @@ class InjectorClient:
         # Initializing the injection session
         session_accepted, session_id = self._init_session(workload_name=splitext(basename(reader.get_path()))[0])
         if session_accepted == 0:
-            InjectorClient.logger.warning("No valid hosts for injection detected. Aborting...")
+            InjectorController.logger.warning("No valid hosts for injection detected. Aborting...")
             return
 
         self._session_id = session_id
@@ -202,7 +202,7 @@ class InjectorClient:
         self._client.start()
 
         if self._client.get_n_registered_hosts() == 0:
-            InjectorClient.logger.warning("No connected hosts for pulling information. Aborting...")
+            InjectorController.logger.warning("No connected hosts for pulling information. Aborting...")
             return
 
         msg = MessageBuilder.command_greet(0)
@@ -251,7 +251,7 @@ class InjectorClient:
                 if msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.ACK_YES:
                     # If an host replies to the injection start command with a positive ack, its log writer is
                     # instantiated, together with its entry in the pendingTasks dictionary
-                    InjectorClient.logger.info("Injection session started with host %s" % formatipport(addr))
+                    InjectorController.logger.info("Injection session started with engine %s" % formatipport(addr))
                     session_accepted.add(addr)
                     session_replied += 1
                     self._outputsDirs[addr] = format_output_directory(self._resultsDir, addr, workload_name)
@@ -264,7 +264,7 @@ class InjectorClient:
                     self._pendingTasks[addr] = set()
                 elif msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.ACK_NO:
                     # If an host rejects the injection start command, we discard it
-                    InjectorClient.logger.warning("Injection session request rejected by host %s" % formatipport(addr))
+                    InjectorController.logger.warning("Injection session request rejected by engine %s" % formatipport(addr))
                     session_replied += 1
                     self._client.remove_host(addr)
             sleep(self._sleepPeriod)
@@ -273,7 +273,7 @@ class InjectorClient:
         if session_check_now - session_check_start >= self._sessionWait:
             # If we have reached the time out, it means that not all of the connected hosts have replied. This is
             # highly unlikely, but could still happen. In this case, we remove all hosts that have not replied
-            InjectorClient.logger.warning("Injection session startup reached the timeout limit")
+            InjectorController.logger.warning("Injection session startup reached the timeout limit")
             for addr in self._client.get_registered_hosts():
                 if addr not in session_accepted:
                     self._client.remove_host(addr)
@@ -296,13 +296,13 @@ class InjectorClient:
             if self._client.peek_msg_queue() > 0:
                 addr, msg = self._client.pop_msg_queue()
                 if msg[MessageBuilder.FIELD_TYPE] == MessageBuilder.ACK_YES:
-                    InjectorClient.logger.info("Injection session closed with host %s" % formatipport(addr))
+                    InjectorController.logger.info("Injection session closed with engine %s" % formatipport(addr))
                     if not self._suppressOutput:
                         self._writers[addr].write_entry(MessageBuilder.command_session(msg[MessageBuilder.FIELD_TIME], end=True))
                     session_closed += 1
                 else:
                     # If we receive a message that is not an ack after all tasks have terminated, something is wrong
-                    InjectorClient.logger.error("Ack expected from host %s, got %s" % (formatipport(addr), msg[MessageBuilder.FIELD_TYPE]))
+                    InjectorController.logger.error("Ack expected from engine %s, got %s" % (formatipport(addr), msg[MessageBuilder.FIELD_TYPE]))
             sleep(self._sleepPeriod)
             session_check_now = time()
 
@@ -342,17 +342,17 @@ class InjectorClient:
                     self._writers[addr].write_entry(msg)
             # We log on the terminal the content of the message in a pretty form
             if msg_type == MessageBuilder.STATUS_START:
-                InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorController.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_RESTART:
-                InjectorClient.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorController.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_END:
-                InjectorClient.logger.info("Task %s terminated successfully on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorController.logger.info("Task %s terminated successfully on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
                 # If a task terminates, we remove its sequence number from the set of pending tasks for the host
                 self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
                 if not self._suppressOutput:
                     self._write_task_output(addr, msg)
             elif msg_type == MessageBuilder.STATUS_ERR:
-                InjectorClient.logger.error("Task %s terminated with error code %s on host %s" % (
+                InjectorController.logger.error("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
                 self._pendingTasks[addr].discard(msg[MessageBuilder.FIELD_SEQNUM])
                 if not self._suppressOutput:
@@ -360,7 +360,7 @@ class InjectorClient:
             elif msg_type == MessageBuilder.ACK_YES:
                 # ACK messages after the initialization phase are received ONLY when a connection is restored,
                 # and the session must be resumed
-                InjectorClient.logger.warning("Session resumed with host %s" % formatipport(addr))
+                InjectorController.logger.warning("Session resumed with engine %s" % formatipport(addr))
                 # If the ack msg contains an error, it means all previously running tasks have been lost
                 if not self._suppressOutput:
                     self._writers[addr].write_entry(MessageBuilder.status_connection(time(), restored=True))
@@ -369,7 +369,7 @@ class InjectorClient:
                     if not self._suppressOutput:
                         self._writers[addr].write_entry(MessageBuilder.status_reset(msg[MessageBuilder.FIELD_TIME]))
             elif msg_type == MessageBuilder.ACK_NO:
-                InjectorClient.logger.warning("Session cannot be resumed with host %s" % formatipport(addr))
+                InjectorController.logger.warning("Session cannot be resumed with engine %s" % formatipport(addr))
                 self._client.remove_host(addr)
 
     def _process_msg_pull(self, addr, msg):
@@ -393,23 +393,23 @@ class InjectorClient:
                 self._writers[addr].write_entry(msg)
             msg_type = msg[MessageBuilder.FIELD_TYPE]
             if msg_type == MessageBuilder.STATUS_START:
-                InjectorClient.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorController.logger.info("Task %s started on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_RESTART:
-                InjectorClient.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
+                InjectorController.logger.info("Task %s restarted on host %s" % (msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
             elif msg_type == MessageBuilder.STATUS_END:
-                InjectorClient.logger.info("Task %s terminated successfully on host %s" % (
+                InjectorController.logger.info("Task %s terminated successfully on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], formatipport(addr)))
                 if not self._suppressOutput:
                     self._write_task_output(addr, msg)
             elif msg_type == MessageBuilder.STATUS_ERR:
-                InjectorClient.logger.error("Task %s terminated with error code %s on host %s" % (
+                InjectorController.logger.error("Task %s terminated with error code %s on host %s" % (
                     msg[MessageBuilder.FIELD_DATA], str(msg[MessageBuilder.FIELD_ERR]), formatipport(addr)))
                 if not self._suppressOutput:
                     self._write_task_output(addr, msg)
             elif msg_type == MessageBuilder.STATUS_GREET:
                 status_string = 'An injection session is in progress' if msg[MessageBuilder.FIELD_ISF] else \
                     'No injection session is in progress'
-                InjectorClient.logger.info("Greetings. Host %s is alive with %s currently active tasks. %s" % (
+                InjectorController.logger.info("Greetings. Engine %s is alive with %s currently active tasks. %s" % (
                     formatipport(addr), str(msg[MessageBuilder.FIELD_DATA]), status_string))
 
     def _get_timestamp(self, t):
@@ -458,7 +458,7 @@ class InjectorClient:
         A signal handler to perform a graceful exit procedure on SIGINT 
         """
         if sig == signal.SIGINT or sig == signal.SIGTERM:
-            InjectorClient.logger.info('Exit requested by user. Cleaning up...')
+            InjectorController.logger.info('Exit requested by user. Cleaning up...')
             if self._writers is not None and not self._suppressOutput:
                 for w in self._writers.values():
                     w.close()
@@ -467,5 +467,5 @@ class InjectorClient:
             self._client.stop()
             # Terminating and waiting for all aux processes
             self._subman.stop_subprocesses()
-            InjectorClient.logger.info('Injection client stopped by user!')
+            InjectorController.logger.info('Injection controller stopped by user!')
             exit()

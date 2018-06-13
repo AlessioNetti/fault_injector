@@ -199,7 +199,7 @@ if __name__ == '__main__':
                         help="Discard metrics related to first-order derivatives in feature vectors.")
     parser.add_argument("-c", action="store_true", dest="splitFeatures",
                         help="Instructs the algorithm that feature vectors include information from multiple cores and"
-                             "must thus be split in separate feature vectors.")
+                             " must thus be split in separate feature vectors.")
     parser.add_argument("-C", action="store_true", dest="splitFeaturesAlt",
                         help="Like the -c option. In addition, the feature vectors from different cores are fed to"
                              "separate classifiers, and not to the same classifier.")
