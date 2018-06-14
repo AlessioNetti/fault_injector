@@ -1,10 +1,34 @@
+"""
+MIT License
+
+Copyright (c) 2018 AlessioNetti
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 import logging, signal
 from fault_injector.network.msg_client import MessageClient
 from fault_injector.network.msg_builder import MessageBuilder
 from fault_injector.util.config_tools import ConfigLoader
 from fault_injector.util.subprocess_manager import SubprocessManager
 from fault_injector.util.misc import formatipport, strtoaddr
-from fault_injector.util.misc import format_injection_filename, format_output_directory, format_output_filename
+from fault_injector.util.misc import format_injection_filename, format_output_directory, format_output_filename, VER_ID
 from fault_injector.io.writer import ExecutionLogWriter
 from fault_injector.io.reader import Reader
 from os.path import splitext, basename, isdir
@@ -108,6 +132,7 @@ class InjectorController:
         :param max_tasks: The maximum number of tasks to be processed before terminating. Useful for debugging
         :param suppress_output: If True, all output file writing is suppressed
         """
+        InjectorController.logger.info("FINJ Injection Controller v%s started" % VER_ID)
         self._subman.start_subprocesses()
         self._suppressOutput = suppress_output
         if reader is not None:

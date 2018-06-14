@@ -1,9 +1,33 @@
+"""
+MIT License
+
+Copyright (c) 2018 AlessioNetti
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 import logging, signal
 from time import time
 from fault_injector.network.msg_server import MessageServer
 from fault_injector.injection.thread_pool import InjectionThreadPool
 from fault_injector.network.msg_builder import MessageBuilder
-from fault_injector.util.misc import formatipport
+from fault_injector.util.misc import formatipport, VER_ID
 from fault_injector.util.config_tools import ConfigLoader
 from fault_injector.io.task import Task
 from fault_injector.util.subprocess_manager import SubprocessManager
@@ -59,6 +83,7 @@ class InjectorEngine:
         """
         Listens for incoming fault injection requests and executes them 
         """
+        InjectorEngine.logger.info("FINJ Injection Engine v%s started" % VER_ID)
         signal.signal(signal.SIGINT, self._signalhandler)
         signal.signal(signal.SIGTERM, self._signalhandler)
         self._subman.start_subprocesses()
