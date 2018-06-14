@@ -11,21 +11,21 @@ Workloads in FINJ are structured as CSV files containing entries for tasks that 
  ## Table of Contents
 
   * [Getting Started](#getting-started)
-        * [Starting Controller Instances](#starting-controller-instances)
-        * [Starting Engine Instances](#starting-engine-instances)
+    * [Starting Controller Instances](#starting-controller-instances)
+    * [Starting Engine Instances](#starting-engine-instances)
   * [Tasks and Workloads](#tasks-and-workloads)
-        * [Tasks in FINJ](#tasks-in-finj)
-        * [Workload Generation](#workload-generation)
-        * [Output Data](#output-data)
+    * [Tasks in FINJ](#tasks-in-finj)
+    * [Workload Generation](#workload-generation)
+    * [Output Data](#output-data)
   * [Configuration](#configuration)
-        * [Controller-only Options](#controller-only-options)
-        * [Engine-only Options](#engine-only-options)
-        * [Generic Options](#generic-options)
+    * [Controller-only Options](#controller-only-options)
+    * [Engine-only Options](#engine-only-options)
+    * [Generic Options](#generic-options)
   * [Miscellaneous Info](#miscellaneous-info)
 
 ## Getting Started
 
-You can install FINJ by simply cloning the repository. Everything you need to get up and running is included. There are no external Python dependencies, except for the *scikit-learn*, *scipy* and *numpy* libraries, in case you wish to use the workload_generator and post_processing packages.  Launch scripts are supplied with FINJ in order to start and configure engine and controller instances. These scripts are **finj_controller.py** and **finj_engine.py**.
+You can install FINJ by simply cloning the repository. Everything you need to get up and running is included. There are no external Python dependencies, except for the *scikit-learn*, *scipy* and *numpy* libraries, in case you wish to use the *workload_generator* and *post_processing* packages.  Launch scripts are supplied with FINJ in order to start and configure engine and controller instances. These scripts are **finj_controller.py** and **finj_engine.py**.
 
 ### Starting Controller instances
 
@@ -48,7 +48,7 @@ Its optional arguments are the following:
 
 ### Starting Engine instances
 
-FINJ engines should be started  on nodes that will be subject  to fault injection. The engine is structured as a daemon, and is perpetually running. The engine waits for task commands to be received from remote controller instances: these commands are accepted from only one controller at a time, which is defined as the master of the injection session. The engine manages received task commands by assigning them to a dedicated thread from a pool. The thread manages all aspects related to the execution of the task, such as spawning the necessary subprocesses and sending status messages to controllers when relevant events (such as the start or termination of the task) occur.
+FINJ engines should be started  on nodes that will be subject  to fault injection. The engine is structured as a daemon, and is perpetually running. The engine waits for task commands to be received from remote controller instances: these commands are accepted from only one controller at a time, which is defined as the *master* of the injection session. The engine manages received task commands by assigning them to a dedicated thread from a pool. The thread manages all aspects related to the execution of the task, such as spawning the necessary subprocesses and sending status messages to controllers when relevant events (such as the start or termination of the task) occur.
 
 The **finj_engine.py** script allows you to configure and start engine daemons on target nodes. Its syntax is the following:
 
