@@ -5,6 +5,9 @@
 #include <time.h>
 #include <signal.h>
 
+// This anomaly program is inspired by the "memeater" anomaly described in the ISC-HPC 2017 paper by Tuncer et al.
+// "Diagnosing Performance Variations in HPC Applications Using Machine Learning", pp. 355-373, Springer.
+
 int child_pid = 0, parent_pid = 0, child_status = 0;
 
 void signal_handler(int sig_number)

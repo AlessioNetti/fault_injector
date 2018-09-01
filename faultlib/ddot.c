@@ -6,6 +6,9 @@
 #include <time.h>
 #include <math.h>
 
+// This anomaly program is inspired by the "ddot" anomaly described in the ISC-HPC 2017 paper by Tuncer et al.
+// "Diagnosing Performance Variations in HPC Applications Using Machine Learning", pp. 355-373, Springer.
+
 void signal_handler(int sig_number)
 {
     if(sig_number == SIGALRM || sig_number == SIGINT || sig_number == SIGTERM)
