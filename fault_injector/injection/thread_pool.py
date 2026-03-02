@@ -235,7 +235,7 @@ class ThreadPool(ABC):
         if self._terminating or not self._initialized:
             return
         for i in range(len(self._threads)):
-            if not self._threads[i].isAlive():
+            if not self._threads[i].is_alive():
                 ThreadPool.logger.warning('A thread in the pool died unexpectedly, will be restored')
                 self._threads[i].join()
                 self._threads[i] = ThreadWrapper(target=self._working_loop)

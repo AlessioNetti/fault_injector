@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import csv, logging
+import csv, logging, os
 from abc import ABC, abstractmethod
 from fault_injector.io.task import Task
 from fault_injector.network.msg_builder import MessageBuilder
@@ -100,6 +100,7 @@ class CSVWriter(Writer):
         fieldict = {k: k for k in self._fieldnames}
         self._wfile = None
         try:
+            os.makedirs(os.path.dirname(os.path.abspath(self._path)), exist_ok=True)
             self._wfile = open(self._path, 'w')
             self._writer = csv.DictWriter(self._wfile, fieldnames=self._fieldnames, delimiter=CSVWriter.DELIMITER_CHAR,
                                           quotechar=CSVWriter.QUOTE_CHAR, restval=CSVWriter.NONE_VALUE)
@@ -159,6 +160,7 @@ class ExecutionLogWriter(Writer):
         self._fieldnames = MessageBuilder.FIELDS
         fieldict = {k: k for k in self._fieldnames}
         try:
+            os.makedirs(os.path.dirname(os.path.abspath(self._path)), exist_ok=True)
             self._wfile = open(self._path, 'w')
             self._writer = csv.DictWriter(self._wfile, fieldnames=self._fieldnames, delimiter=CSVWriter.DELIMITER_CHAR,
                                           quotechar=CSVWriter.QUOTE_CHAR, restval=CSVWriter.NONE_VALUE,
